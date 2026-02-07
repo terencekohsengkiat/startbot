@@ -15,57 +15,53 @@
             --warning: #ffc107;
             --text-main: #333;
             --text-light: #666;
+            --disabled: #e9ecef;
         }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             margin: 0;
-            padding: 20px;
+            padding: 0; /* Padding moved to container for sticky header */
             color: var(--text-main);
-            padding-bottom: 120px; /* Extra space for bottom bar */
+            padding-bottom: 120px;
         }
 
-        h1 { text-align: center; font-size: 1.5rem; margin-bottom: 20px; }
-
-        /* --- CONTROL BAR --- */
-        .control-bar {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--card-bg);
-            padding: 15px;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        /* --- STICKY HEADER --- */
+        .sticky-header {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background-color: var(--card-bg);
+            padding: 15px 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            z-index: 100;
         }
 
-        .status-indicator {
+        .timer-display {
+            font-size: 2rem;
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-main);
+        }
+
+        .current-action {
             font-size: 0.9rem;
-            font-weight: bold;
-            color: var(--text-light);
+            color: var(--primary);
+            font-weight: 600;
+            text-align: right;
         }
-        .status-indicator.connected { color: var(--success); }
 
-        .btn-connect {
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 25px;
-            font-weight: bold;
-            font-size: 1rem;
-            cursor: pointer;
-        }
+        /* --- CONTAINER --- */
+        .container { padding: 20px; }
 
         /* --- CARD STACK --- */
         #sequence-stack {
             display: flex;
             flex-direction: column;
-            gap: 10px; /* Reduced gap to show connection better */
+            gap: 10px;
             min-height: 100px;
         }
 
@@ -75,10 +71,31 @@
             padding: 15px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.05);
             position: relative;
-            touch-action: none; /* Critical for drag on mobile */
+            touch-action: none;
+            transition: opacity 0.3s, background-color 0.3s;
         }
 
-        /* Visual connector line between cards */
+        /* Completed Card State */
+        .card.completed {
+            background-color: var(--disabled);
+            opacity: 0.7;
+            border-left-color: #999 !important;
+        }
+        .card.completed .card-title { color: #666; text-decoration: line-through; }
+        .card.completed select, .card.completed input { pointer-events: none; background: transparent; border: none; }
+        .card.completed .btn-remove { display: none; }
+        
+        .timestamp-log {
+            font-size: 0.75rem;
+            color: #555;
+            margin-top: 10px;
+            font-style: italic;
+            border-top: 1px solid #ccc;
+            padding-top: 5px;
+            display: none;
+        }
+        .card.completed .timestamp-log { display: block; }
+
         .card::after {
             content: '';
             position: absolute;
@@ -91,106 +108,72 @@
         }
         .card:last-child::after { display: none; }
 
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .card-title {
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: var(--primary);
-        }
-        
-        /* Different color for Gap cards */
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .card-title { font-size: 1.1rem; font-weight: bold; color: var(--primary); }
         .card-type-gap { border-left: 5px solid #ffc107; }
         .card-type-start { border-left: 5px solid var(--primary); }
-
         .card-type-gap .card-title { color: var(--text-main); font-size: 1rem; }
-        
-        .btn-remove {
-            background: none;
-            border: none;
-            color: var(--danger);
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 0 10px;
-        }
+        .btn-remove { background: none; border: none; color: var(--danger); font-size: 1.5rem; cursor: pointer; padding: 0 10px; }
 
         /* --- FORM ELEMENTS --- */
-        .form-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
+        .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
         label { font-size: 0.9rem; color: var(--text-light); }
-
-        select, input[type="number"] {
-            padding: 8px;
-            border-radius: 6px;
-            border: 1px solid #ddd;
-            font-size: 1rem;
-            background: #fff;
-            width: 60%;
-        }
+        select { padding: 8px; border-radius: 6px; border: 1px solid #ddd; font-size: 1rem; background: #fff; width: 60%; }
 
         /* --- ADD BUTTONS --- */
-        .add-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-top: 30px;
-        }
-
-        .btn-add {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            border: none;
-            font-size: 1.8rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.1s;
-        }
+        .add-buttons { display: flex; justify-content: center; gap: 20px; margin-top: 30px; }
+        .btn-add { width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 1.8rem; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.1s; }
         .btn-add:active { transform: scale(0.95); }
-
         .btn-add-start { background-color: var(--primary); color: white; }
         .btn-add-gap { background-color: #ffc107; color: white; }
 
-        /* --- DRAG HANDLES --- */
-        .drag-handle {
-            color: #bbb;
-            margin-right: 15px;
-            cursor: grab;
-            font-size: 1.5rem;
-            padding: 5px; /* Bigger touch target */
+        /* --- CONTROL BAR --- */
+        .control-bar {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: var(--card-bg);
+            padding: 15px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            display: flex; justify-content: space-between; align-items: center; z-index: 100;
         }
+        .status-indicator { font-size: 0.9rem; font-weight: bold; color: var(--text-light); }
+        .status-indicator.connected { color: var(--success); }
+        .btn-connect { background-color: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 25px; font-weight: bold; font-size: 1rem; cursor: pointer; }
         
-        /* Highlight while dragging */
-        .sortable-ghost {
-            opacity: 0.4;
-            background-color: #e9ecef;
-        }
+        /* Secondary Menu for Logs/Reset */
+        .secondary-menu { text-align: center; margin-top: 40px; padding-bottom: 20px; border-top: 1px solid #ddd; padding-top: 20px;}
+        .btn-secondary { background: none; border: 1px solid #999; color: #555; padding: 8px 15px; border-radius: 5px; margin: 0 5px; font-size: 0.9rem; }
+
+        .drag-handle { color: #bbb; margin-right: 15px; cursor: grab; font-size: 1.5rem; padding: 5px; }
 
     </style>
 </head>
 <body>
 
-    <h1>StartBot Regatta Manager</h1>
-
-    <div id="sequence-stack">
+    <div class="sticky-header">
+        <div class="timer-display" id="mainTimer">00:00</div>
+        <div class="current-action">
+            <div id="statusAction">Ready</div>
+            <div style="font-size:0.7rem; color:#999;" id="nextAction">Waiting for start</div>
         </div>
+    </div>
 
-    <div class="add-buttons">
-        <button class="btn-add btn-add-start" onclick="addStartCard()" title="Add Start Sequence">⛵</button>
-        <button class="btn-add btn-add-gap" onclick="addGapCard()" title="Add Time Gap">⏳</button>
+    <div class="container">
+        <h1>StartBot Manager</h1>
+
+        <div id="sequence-stack">
+            </div>
+
+        <div class="add-buttons">
+            <button class="btn-add btn-add-start" onclick="addStartCard()" title="Add Start Sequence">⛵</button>
+            <button class="btn-add btn-add-gap" onclick="addGapCard()" title="Add Time Gap">⏳</button>
+        </div>
+        
+        <div class="secondary-menu">
+            <button class="btn-secondary" onclick="downloadLog()">Download CSV Log</button>
+            <button class="btn-secondary" onclick="resetAll()">Reset All</button>
+            <button class="btn-secondary" style="color:var(--primary); border-color:var(--primary);" onclick="simulateSequence()">▶ Test Simulation</button>
+        </div>
     </div>
 
     <div class="control-bar">
@@ -200,26 +183,30 @@
 
     <script>
         let cardIdCounter = 0;
+        let eventLog = []; // Stores the log data for CSV
 
-        // Initialize SortableJS
+        // --- INITIALIZATION ---
         const stackElement = document.getElementById('sequence-stack');
+        
+        // Initialize Sortable
         new Sortable(stackElement, {
             animation: 150,
-            handle: '.drag-handle', // Drag only by the handle
-            ghostClass: 'sortable-ghost', // Class name for the drop placeholder
-            onEnd: function (evt) {
-                // Future: This function triggers when a drag is finished
-                // We will use this later to re-calculate the JSON package sent to the Pi
-                console.log("Order changed!");
-            }
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost',
+            onEnd: saveState // Auto-save when order changes
         });
 
-        // --- UI FUNCTIONS ---
+        // Load saved state on startup
+        window.onload = function() {
+            loadState();
+        };
 
-        function addStartCard() {
+        // --- CORE UI FUNCTIONS ---
+
+        function addStartCard(data = null) {
             const id = cardIdCounter++;
             const cardHTML = `
-                <div class="card card-type-start" id="card-${id}">
+                <div class="card card-type-start" id="card-${id}" data-type="start">
                     <div class="card-header">
                         <div style="display:flex; align-items:center;">
                             <span class="drag-handle">☰</span>
@@ -227,29 +214,28 @@
                         </div>
                         <button class="btn-remove" onclick="removeCard(${id})">&times;</button>
                     </div>
+                    <div class="timestamp-log" id="log-${id}"></div>
                     
                     <div class="form-row">
                         <label>Class</label>
-                        <select id="class-${id}">
+                        <select class="save-trigger" id="class-${id}">
                             <option value="ILCA">ILCA (Laser)</option>
                             <option value="Optimist">Optimist</option>
                             <option value="29er">29er</option>
                             <option value="Generic">Generic Class</option>
                         </select>
                     </div>
-
                     <div class="form-row">
                         <label>Prep Flag</label>
-                        <select id="prep-${id}">
+                        <select class="save-trigger" id="prep-${id}">
                             <option value="P">P (Blue Peter)</option>
                             <option value="U">U Flag</option>
                             <option value="Black">Black Flag</option>
                         </select>
                     </div>
-
                     <div class="form-row">
                         <label>Orange Offset</label>
-                        <select id="orange-${id}">
+                        <select class="save-trigger" id="orange-${id}">
                             <option value="0">Manual</option>
                             <option value="5">5 mins before</option>
                         </select>
@@ -257,12 +243,22 @@
                 </div>
             `;
             stackElement.insertAdjacentHTML('beforeend', cardHTML);
+            
+            // Restore values if loading from save
+            if(data) {
+                document.getElementById(`class-${id}`).value = data.classVal;
+                document.getElementById(`prep-${id}`).value = data.prepVal;
+                document.getElementById(`orange-${id}`).value = data.orangeVal;
+            }
+
+            attachSaveListeners();
+            saveState();
         }
 
-        function addGapCard() {
+        function addGapCard(data = null) {
             const id = cardIdCounter++;
             const cardHTML = `
-                <div class="card card-type-gap" id="card-${id}">
+                <div class="card card-type-gap" id="card-${id}" data-type="gap">
                     <div class="card-header">
                         <div style="display:flex; align-items:center;">
                             <span class="drag-handle">☰</span>
@@ -270,28 +266,175 @@
                         </div>
                         <button class="btn-remove" onclick="removeCard(${id})">&times;</button>
                     </div>
+                    <div class="timestamp-log" id="log-${id}"></div>
                     
                     <div class="form-row">
                         <label>Duration</label>
-                        <select id="gap-${id}">
+                        <select class="save-trigger" id="gap-${id}">
                             <option value="0">Immediate (Rolling)</option>
                             <option value="1">1 Minute Delay</option>
-                            <option value="2">2 Minute Delay</option>
                             <option value="manual">Manual Trigger</option>
                         </select>
-                    </div>
-                    <div style="font-size:0.8rem; color:#666; font-style:italic; margin-top:5px;">
-                        *If set to 'Immediate', next warning starts exactly when previous start sounds.
                     </div>
                 </div>
             `;
             stackElement.insertAdjacentHTML('beforeend', cardHTML);
+            
+            if(data) {
+                document.getElementById(`gap-${id}`).value = data.gapVal;
+            }
+
+            attachSaveListeners();
+            saveState();
         }
 
         function removeCard(id) {
             const card = document.getElementById(`card-${id}`);
-            if (card) {
-                card.remove();
+            if (card) card.remove();
+            saveState();
+        }
+
+        // --- SAVE STATE LOGIC ---
+        function attachSaveListeners() {
+            document.querySelectorAll('.save-trigger').forEach(item => {
+                item.addEventListener('change', saveState);
+            });
+        }
+
+        function saveState() {
+            const cards = [];
+            document.querySelectorAll('.card').forEach(card => {
+                const id = card.id.split('-')[1];
+                if(card.classList.contains('card-type-start')) {
+                    cards.push({
+                        type: 'start',
+                        classVal: document.getElementById(`class-${id}`).value,
+                        prepVal: document.getElementById(`prep-${id}`).value,
+                        orangeVal: document.getElementById(`orange-${id}`).value
+                    });
+                } else {
+                    cards.push({
+                        type: 'gap',
+                        gapVal: document.getElementById(`gap-${id}`).value
+                    });
+                }
+            });
+            localStorage.setItem('startbot_sequence', JSON.stringify(cards));
+        }
+
+        function loadState() {
+            const saved = localStorage.getItem('startbot_sequence');
+            if (saved) {
+                stackElement.innerHTML = ''; // Clear defaults
+                const cards = JSON.parse(saved);
+                cards.forEach(card => {
+                    if(card.type === 'start') addStartCard(card);
+                    else addGapCard(card);
+                });
+            } else {
+                // Default if no save
+                if(stackElement.children.length === 0) addStartCard();
+            }
+        }
+
+        function resetAll() {
+            if(confirm("Are you sure? This will delete all sequences.")) {
+                localStorage.removeItem('startbot_sequence');
+                eventLog = [];
+                location.reload();
+            }
+        }
+
+        // --- CSV LOGGING LOGIC ---
+
+        function logEvent(classFlag, eventType, details) {
+            const now = new Date();
+            const timeString = now.toTimeString().split(' ')[0]; // HH:MM:SS
+            
+            // Push to internal memory
+            eventLog.push({
+                time: timeString,
+                class: classFlag,
+                event: eventType,
+                details: details
+            });
+            
+            console.log(`LOG: ${timeString} - ${classFlag} - ${eventType}`);
+        }
+
+        function downloadLog() {
+            if(eventLog.length === 0) {
+                alert("No events recorded yet!");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Time,Class,Event,Details\n"; // Header
+
+            eventLog.forEach(row => {
+                csvContent += `${row.time},${row.class},${row.event},${row.details}\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            const dateStr = new Date().toISOString().slice(0,10);
+            const uniqueID = Math.floor(Math.random() * 10000);
+            
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `start_sequence_${dateStr}_${uniqueID}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // --- SIMULATION LOGIC (Visual Testing) ---
+
+        function simulateSequence() {
+            const firstCard = document.querySelector('.card:not(.completed)');
+            if(!firstCard) return alert("All sequences complete!");
+
+            const id = firstCard.id.split('-')[1];
+            const isStart = firstCard.classList.contains('card-type-start');
+            const timerDisplay = document.getElementById('mainTimer');
+            const statusAction = document.getElementById('statusAction');
+
+            if(isStart) {
+                const className = document.getElementById(`class-${id}`).value;
+                const prepName = document.getElementById(`prep-${id}`).value;
+                
+                // Simulate a fast 5-second countdown for testing
+                let timeLeft = 5;
+                statusAction.innerText = `Starting ${className}`;
+                logEvent(className, "Sequence Initiated", "Manual Start");
+
+                const interval = setInterval(() => {
+                    timeLeft--;
+                    timerDisplay.innerText = `00:0${timeLeft}`;
+                    
+                    if(timeLeft === 4) logEvent(className, "Class Flag", "Displayed");
+                    if(timeLeft === 2) logEvent(className, "Prep Flag", `${prepName} Displayed`);
+
+                    if(timeLeft <= 0) {
+                        clearInterval(interval);
+                        timerDisplay.innerText = "START!";
+                        logEvent(className, "Start Signal", "GO");
+                        
+                        // Mark Completed
+                        firstCard.classList.add('completed');
+                        document.getElementById(`log-${id}`).innerText = `Started at ${new Date().toLocaleTimeString()}`;
+                        
+                        // Move to next
+                        setTimeout(() => {
+                            timerDisplay.innerText = "00:00";
+                            simulateSequence(); // Recursive call for Rolling start check
+                        }, 1000);
+                    }
+                }, 1000); // 1 second intervals
+            } else {
+                // It's a gap card
+                statusAction.innerText = "Waiting (Gap)";
+                firstCard.classList.add('completed');
+                setTimeout(simulateSequence, 1000); // instant skip for test
             }
         }
 
@@ -302,12 +445,8 @@
             setTimeout(() => {
                 statusText.innerText = "Connected to Pi";
                 statusText.classList.add("connected");
-                alert("Simulated Connection Successful!\n\nDrag and drop is now active.");
             }, 800);
         }
-
-        // Initialize with one start card
-        addStartCard();
 
     </script>
 </body>
