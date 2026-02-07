@@ -3,95 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Regatta Pro</title>
+    <title>Regatta Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
-        :root { --bg-color: #1a1a1a; --card-bg: #2d2d2d; --primary: #007bff; --danger: #dc3545; --success: #28a745; --text-main: #ffffff; --text-dim: #b0b0b0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background: var(--bg-color); margin: 0; padding-bottom: 160px; color: var(--text-main); }
+        :root { --bg-color: #121212; --card-bg: #1e1e1e; --primary: #007bff; --danger: #dc3545; --success: #28a745; --warning: #ffc107; --text-main: #ffffff; --text-dim: #b0b0b0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background: var(--bg-color); margin: 0; padding-bottom: 200px; color: var(--text-main); overflow-x: hidden; }
         
-        .sticky-header { position: sticky; top: 0; z-index: 1000; background: #000000; padding: 15px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
-        .timers { text-align: left; }
-        .main-timer { font-size: 2.5rem; font-weight: bold; font-family: monospace; color: var(--success); line-height: 1; }
-        .sub-timer { font-size: 1.2rem; font-family: monospace; color: #ffc107; margin-top: 5px; }
-        .sub-label { font-size: 0.8rem; color: #666; text-transform: uppercase; margin-top: 2px; }
-        
-        .header-controls { display: flex; gap: 8px; }
-        .btn-action { padding: 12px 10px; border-radius: 6px; border: none; font-weight: bold; font-size: 0.85rem; cursor: pointer; text-transform: uppercase; color: white; display: flex; align-items: center; justify-content: center; text-align: center;}
-        .btn-start { background: var(--success); width: 70px; }
-        .btn-ap { background: var(--danger); width: 50px; display: none; }
-        .btn-horn { background: #ffc107; color: black; width: 60px; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+        /* HEADER (TIMERS) */
+        .sticky-header { position: sticky; top: 0; z-index: 1000; background: #000000; padding: 10px; border-bottom: 1px solid #333; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: center; }
+        .timer-box { background: #222; padding: 8px; border-radius: 8px; }
+        .timer-val { font-size: 2.2rem; font-weight: bold; font-family: monospace; line-height: 1; }
+        .timer-label { font-size: 0.7rem; text-transform: uppercase; color: #888; margin-top: 4px; }
+        .timer-green { color: var(--success); }
+        .timer-yellow { color: var(--warning); }
 
-        .container { padding: 15px; }
-        #sequence-stack { display: flex; flex-direction: column; gap: 12px; }
-        .card { background: var(--card-bg); border-radius: 8px; padding: 15px; border-left: 5px solid #555; position: relative; transition: opacity 0.3s; }
-        .card.locked { opacity: 0.7; pointer-events: none; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .card-title { font-weight: bold; font-size: 1.1rem; }
-        .drag-handle { cursor: grab; color: #666; font-size: 1.5rem; padding-right: 10px; }
+        /* BODY (CARDS) */
+        .container { padding: 10px; }
+        #sequence-stack { display: flex; flex-direction: column; gap: 8px; }
         
-        .form-row { margin-bottom: 12px; }
-        label { display: block; color: var(--text-dim); font-size: 0.8rem; margin-bottom: 4px; }
-        select, input[type="time"] { width: 100%; background: #444; color: white; border: 1px solid #555; padding: 10px; border-radius: 6px; font-size: 1rem; box-sizing: border-box; }
+        /* CARD STYLES */
+        .card { background: var(--card-bg); border-radius: 6px; border-left: 4px solid #555; overflow: hidden; transition: all 0.2s; }
+        .card.active { border-left: 8px solid var(--success); background: #2a2a2a; }
+        .card.pending { opacity: 0.7; }
         
-        .commit-zone { margin-top: 30px; margin-bottom: 20px; }
-        .btn-commit { width: 100%; padding: 15px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; transition: all 0.3s; text-transform: uppercase; }
+        .card-header { padding: 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .card-info { flex-grow: 1; }
+        .card-title { font-weight: bold; font-size: 1rem; }
+        .card-status { font-size: 0.8rem; color: var(--warning); font-family: monospace; }
+        .card-body { padding: 0 12px 12px 12px; display: none; } /* Collapsed by default */
+        .card.expanded .card-body { display: block; }
+        
+        .drag-handle { color: #666; margin-right: 10px; font-size: 1.2rem; }
+        .form-row { margin-bottom: 10px; }
+        label { display: block; color: var(--text-dim); font-size: 0.75rem; margin-bottom: 2px; }
+        select, input[type="time"] { width: 100%; background: #333; color: white; border: 1px solid #444; padding: 8px; border-radius: 4px; font-size: 0.9rem; }
+
+        /* ADD BUTTONS */
+        .add-zone { display: flex; justify-content: center; gap: 10px; margin: 20px 0; }
+        .btn-add { width: 40px; height: 40px; border-radius: 50%; border: none; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+        /* COMMIT BUTTON */
+        .commit-zone { padding: 0 10px; margin-bottom: 10px; }
+        .btn-commit { width: 100%; padding: 12px; font-size: 1rem; font-weight: bold; border-radius: 6px; border: none; cursor: pointer; text-transform: uppercase; }
         .btn-commit.unlocked { background: var(--primary); color: white; }
-        .btn-commit.locked { background: var(--danger); color: white; animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+        .btn-commit.ready { background: var(--success); color: white; animation: pulse 1.5s infinite; }
+        .btn-commit.locked { background: #333; color: #888; cursor: default; }
 
-        .add-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
-        .btn-add { width: 50px; height: 50px; border-radius: 50%; border: none; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; background: #444; color: white; }
+        /* FOOTER (CONTROLS) */
+        .footer-controls { position: fixed; bottom: 0; left: 0; right: 0; background: #000; padding: 10px; border-top: 1px solid #333; z-index: 2000; display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+        .btn-foot { height: 60px; border: none; border-radius: 6px; font-weight: bold; font-size: 0.7rem; color: black; text-transform: uppercase; white-space: normal; line-height: 1.1; }
+        
+        .btn-horn { background: var(--warning); }
+        .btn-x { background: #17a2b8; color: white; }
+        .btn-recall { background: #e83e8c; color: white; }
+        .btn-abandon { background: var(--danger); color: white; }
+        .btn-ap { background: var(--danger); color: white; border: 2px solid white; }
 
-        .control-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #000; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #333; z-index: 2000; }
-        .status-text { font-size: 0.8rem; color: #666; }
+        /* CONNECT BAR */
+        .connect-bar { position: fixed; bottom: 85px; left: 0; right: 0; background: rgba(0,0,0,0.8); padding: 5px 10px; display: flex; justify-content: space-between; align-items: center; z-index: 1900; }
+        .status-text { font-size: 0.7rem; color: #666; }
         .status-text.connected { color: var(--success); }
-        .btn-connect { background: var(--primary); color: white; border: none; padding: 8px 20px; border-radius: 20px; font-weight: bold; }
-        .btn-log { background: transparent; border: 1px solid #666; color: #666; padding: 5px 10px; border-radius: 4px; font-size: 0.8rem; }
+        .btn-connect { background: var(--primary); color: white; border: none; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; }
+
+        /* MODAL */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 3000; display: none; align-items: center; justify-content: center; }
+        .modal { background: #222; padding: 20px; border-radius: 8px; width: 90%; max-width: 350px; text-align: center; }
+        .modal h3 { margin-top: 0; color: white; }
+        .modal-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }
+        .btn-modal { padding: 12px; background: #444; color: white; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; }
+        .btn-modal:active { background: #666; }
+        
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
 
     <div class="sticky-header">
-        <div class="timers">
-            <div class="main-timer" id="mainTimer">00:00</div>
-            <div class="sub-timer" id="nextSignalTimer">--:--</div>
-            <div class="sub-label" id="nextSignalLabel">Next Signal</div>
+        <div class="timer-box">
+            <div class="timer-val timer-green" id="mainTimer">00:00</div>
+            <div class="timer-label">TO START</div>
         </div>
-        <div class="header-controls">
-            <button class="btn-action btn-horn" id="btnHorn" 
-                onpointerdown="manualHorn(true)" 
-                onpointerup="manualHorn(false)" 
-                onpointerleave="manualHorn(false)"
-                oncontextmenu="return false;">HORN</button>
-            <button id="btnStart" class="btn-action btn-start" onclick="startNow()">START<br>NOW</button>
-            <button id="btnAP" class="btn-action btn-ap" onclick="sendAP()">AP</button>
+        <div class="timer-box">
+            <div class="timer-val timer-yellow" id="nextSignalTimer">--:--</div>
+            <div class="timer-label" id="nextSignalLabel">NEXT EVENT</div>
         </div>
     </div>
 
     <div class="container">
         <div id="sequence-stack"></div>
-        <div class="add-buttons">
-            <button class="btn-add" onclick="addStartCard()" style="background: var(--primary)">+</button>
-            <button class="btn-add" onclick="addGapCard()" style="background: #ffc107; color: black">⏳</button>
+        <div class="add-zone">
+            <button class="btn-add" onclick="addStartCard()" style="background: var(--primary); color: white;">+</button>
+            <button class="btn-add" onclick="addGapCard()" style="background: var(--warning); color: black;">⏳</button>
         </div>
         <div class="commit-zone">
-            <button id="btnCommit" class="btn-commit unlocked" onclick="toggleCommit()">COMMIT TO SEQUENCE</button>
+            <button id="btnCommit" class="btn-commit unlocked" onclick="handleCommit()">COMMIT TO SEQUENCE</button>
         </div>
     </div>
-
-    <div class="control-bar">
-        <div>
-            <div class="status-text" id="statusText">Disconnected</div>
-            <button class="btn-log" onclick="downloadLog()">Get Log</button>
-        </div>
+    
+    <div class="connect-bar">
+        <div class="status-text" id="statusText">Disconnected</div>
         <button class="btn-connect" id="btnConnect" onclick="connectBluetooth()">Connect</button>
+        <button onclick="downloadLog()" style="background:none;border:1px solid #555;color:#888;border-radius:4px;font-size:0.7rem;padding:2px 6px;">LOG</button>
+    </div>
+
+    <div class="footer-controls">
+        <button class="btn-foot btn-horn" 
+            onpointerdown="manualHorn(true)" 
+            onpointerup="manualHorn(false)" 
+            onpointerleave="manualHorn(false)"
+            oncontextmenu="return false;">MANUAL<br>HORN</button>
+        
+        <button class="btn-foot btn-x" onclick="sendXFlag()">X FLAG<br>(1 SND)</button>
+        <button class="btn-foot btn-recall" onclick="triggerGenRecall()">GEN<br>RECALL</button>
+        <button class="btn-foot btn-abandon" onclick="triggerAbandon()">ABANDON<br>(RESET)</button>
+        <button class="btn-foot btn-ap" onclick="triggerAP()">AP<br>(POSTPONE)</button>
+    </div>
+
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="modalContent"></div>
     </div>
 
     <script>
+        // --- CONSTANTS ---
         const SERVICE_UUID = '00000001-710e-4a5b-8d75-3e5b444bc3cf';
         const RX_UUID      = '00000002-710e-4a5b-8d75-3e5b444bc3cf';
         const TX_UUID      = '00000003-710e-4a5b-8d75-3e5b444bc3cf';
 
+        // --- STATE ---
         let bluetoothDevice, rxCharacteristic;
         let cardIdCounter = 0;
         let logBuffer = "";
@@ -99,21 +137,20 @@
         let wakeLock = null;
         
         let isCommitted = false;
+        let isRunning = false;
         let activeCardIndex = -1;
+        
         let gapInterval = null;
         let scheduleInterval = null;
-        
-        // Active Card Config
+        let recallGapInterval = null; // Special timer for "Removal Gap"
+
+        // Active Card Details
         let currentClass = "";
         let currentPrep = "";
-        let orangeOffset = 0; 
-        let currentRule = "std"; 
+        let currentRule = "std";
+        let orangeOffset = 0;
 
-        async function requestWakeLock() {
-            try { wakeLock = await navigator.wakeLock.request('screen'); } 
-            catch (err) { console.log(err); }
-        }
-
+        // --- AUDIO ---
         function speak(text) {
             if (!speechEnabled) return;
             window.speechSynthesis.cancel();
@@ -122,6 +159,9 @@
             window.speechSynthesis.speak(u);
         }
 
+        // --- BLUETOOTH ---
+        async function requestWakeLock() { try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){} }
+        
         async function connectBluetooth() {
             try {
                 speechEnabled = true;
@@ -135,7 +175,6 @@
                 const tx = await service.getCharacteristic(TX_UUID);
                 await tx.startNotifications();
                 tx.addEventListener('characteristicvaluechanged', handleNotifications);
-                
                 document.getElementById('statusText').innerText = "Connected";
                 document.getElementById('statusText').classList.add("connected");
                 document.getElementById('btnConnect').style.display = 'none';
@@ -157,100 +196,133 @@
                 if (data.log_end) saveLogFile();
                 
                 if (data.time !== undefined) {
-                    updateTimers(data.time, "pi");
+                    updateDashboard(data.time, "pi");
                     checkVoiceTriggers(data.time);
                 }
                 
-                if (data.status === "Running") {
-                    document.getElementById('btnStart').style.display = 'none';
-                    document.getElementById('btnAP').style.display = 'block';
-                } else if (data.status === "Finished" || data.status === "Stopped") {
-                    document.getElementById('btnStart').style.display = 'block';
-                    document.getElementById('btnAP').style.display = 'none';
-                    if (isCommitted && data.status === "Finished") nextCard();
-                    else if (data.status === "Stopped") resetUI();
+                if (data.status === "Running") isRunning = true;
+                if (data.status === "Finished") {
+                    if (isCommitted) nextCard();
                 }
+                // Stopped is handled by ResetUI usually
             } catch (e) {}
         }
 
+        async function sendCommand(jsonObj) {
+            if (!rxCharacteristic) return;
+            await rxCharacteristic.writeValue(new TextEncoder().encode(JSON.stringify(jsonObj)));
+        }
+
+        // --- CARD LOGIC ---
         function nextCard() {
             const cards = Array.from(document.querySelectorAll('.card'));
+            
+            // Clean up previous
+            if(activeCardIndex >= 0 && activeCardIndex < cards.length) {
+                cards[activeCardIndex].classList.remove('active');
+                cards[activeCardIndex].querySelector('.card-status').innerText = "COMPLETED";
+            }
+
             activeCardIndex++;
+            
             if (activeCardIndex >= cards.length) {
-                // DELAYED COMPLETION MSG (Prevent clash with Flag Remove)
                 setTimeout(() => {
                     speak("Regatta Sequence Complete.");
                     resetUI();
                 }, 3000);
                 return;
             }
+            
             const card = cards[activeCardIndex];
-            cards.forEach(c => c.style.borderLeftWidth = "5px");
-            card.style.borderLeftWidth = "15px"; 
+            card.classList.add('active');
+            card.classList.add('expanded'); // Auto expand
+            card.scrollIntoView({behavior: "smooth", block: "center"});
+
             if (card.classList.contains('card-type-start')) executeStartCard(card);
             else executeGapCard(card);
         }
-        
+
         function executeStartCard(card) {
+            // Read Card Config
             const id = card.id.split('-')[1];
             currentClass = document.getElementById(`class-${id}`).value;
             if(currentClass === "None") currentClass = ""; 
             currentPrep = document.getElementById(`prep-${id}`).value;
-            currentRule = document.getElementById(`rule-${id}`).value; 
-            
+            currentRule = document.getElementById(`rule-${id}`).value;
             const orangeVal = document.getElementById(`orange-${id}`).value;
-            orangeOffset = parseInt(orangeVal) * 60; 
+            orangeOffset = parseInt(orangeVal) * 60;
             
+            // Check Schedule (Only if first card)
             const timeInput = document.getElementById(`time-${id}`).value;
             if (activeCardIndex === 0 && timeInput) {
+                // SCHEDULED START
+                card.querySelector('.card-status').innerText = `SCHEDULED ${timeInput}`;
                 startScheduleWatcher(timeInput);
                 speak(`Sequence Armed for ${timeInput}`);
             } else {
+                // IMMEDIATE / ROLLING START
+                card.querySelector('.card-status').innerText = "RUNNING";
                 firePiSequence();
             }
         }
-        
+
         function executeGapCard(card) {
             const id = card.id.split('-')[1];
-            const durationVal = document.getElementById(`gap-${id}`).value;
-            let seconds = parseInt(durationVal);
+            // Duration might be in data attribute if injected, or input
+            let val = document.getElementById(`gap-${id}`).value;
+            let seconds = parseInt(val);
+            
             if (seconds === 0) { nextCard(); return; }
             
+            card.querySelector('.card-status').innerText = "GAP RUNNING";
             speak(`Gap. ${seconds/60} minutes.`);
+            
             let gapTime = seconds;
-            updateTimers(gapTime, "gap"); 
+            updateDashboard(gapTime, "gap");
+            
             gapInterval = setInterval(() => {
                 gapTime--;
-                updateTimers(gapTime, "gap");
-                if(gapTime === 60) speak("One minute to next sequence.");
-                if(gapTime === 10) speak("Ten seconds.");
-                if(gapTime <= 5 && gapTime > 0) speak(gapTime.toString());
-                if (gapTime <= 0) { clearInterval(gapInterval); nextCard(); }
+                updateDashboard(gapTime, "gap");
+                
+                // AUDIO LOOKAHEAD
+                // Look at next card (activeCardIndex + 1) to announce its warning
+                let nextMsg = "Next Sequence";
+                const nextC = document.querySelectorAll('.card')[activeCardIndex + 1];
+                if(nextC && nextC.classList.contains('card-type-start')) {
+                    const nId = nextC.id.split('-')[1];
+                    const nClass = document.getElementById(`class-${nId}`).value;
+                    nextMsg = (nClass === "None" ? "" : nClass) + " Warning";
+                }
+
+                if (gapTime === 60) speak("One minute to " + nextMsg);
+                if (gapTime === 10) speak("10 seconds.");
+                if (gapTime <= 5 && gapTime > 0) speak(gapTime.toString());
+                if (gapTime <= 0) {
+                    clearInterval(gapInterval);
+                    nextCard();
+                }
             }, 1000);
         }
 
+        // --- TIMERS ---
         function startScheduleWatcher(targetTimeStr) {
             if(scheduleInterval) clearInterval(scheduleInterval);
             scheduleInterval = setInterval(() => {
                 const now = new Date();
-                const nowStr = now.toTimeString().slice(0, 5); 
                 const target = new Date();
                 const [h, m] = targetTimeStr.split(':');
                 target.setHours(h, m, 0, 0);
                 
-                // diff = seconds until First Horn
                 let diff = Math.floor((target - now) / 1000);
                 
                 if (diff < 0) {
                     clearInterval(scheduleInterval);
                     firePiSequence();
                 } else {
-                    updateTimers(diff, "preroll");
-                    
+                    updateDashboard(diff, "preroll");
+                    // Audio
                     if ([45, 30, 20, 15, 10, 5, 4, 3, 2, 1].includes(diff)) {
                          let msg = (orangeOffset > 0) ? "Orange Flag Display" : `${currentClass} Class Flag Display`;
-                         
-                         // FIX: FORCE 10 SECONDS
                          if (diff === 10) speak("10 seconds.");
                          else if(diff <= 5) speak(diff.toString());
                          else speak(`${diff} seconds to ${msg}`);
@@ -262,7 +334,7 @@
         function firePiSequence() {
             if(scheduleInterval) clearInterval(scheduleInterval);
             
-            // FIX: SPECIFIC "NOW" MESSAGE (REPLACES "SEQUENCE INITIATED")
+            // SPECIFIC "NOW" MESSAGE
             if (orangeOffset > 0) speak("NOW! Orange Flag Display.");
             else speak(`NOW! ${currentClass} Class Flag Display.`);
             
@@ -271,83 +343,56 @@
             sendCommand({ command: 'START_SEQUENCE', seconds: duration, rule: currentRule });
         }
 
-        // --- ENHANCED TIMER UI ---
-        function updateTimers(val, mode) {
+        // --- DASHBOARD UI UPDATES ---
+        function updateDashboard(val, mode) {
             if(val < 0) val = 0;
             const baseLen = (currentRule === '3min') ? 180 : 300;
             
-            let mainT = 0;
-            let subT = 0;
-            let label = "";
+            let mainT = 0, subT = 0, label = "";
 
             if (mode === "gap") {
-                mainT = val;
-                subT = val;
-                label = "Gap / Rolling";
+                mainT = val; subT = val; label = "GAP / ROLLING";
             }
             else if (mode === "preroll") {
-                // Pre-roll (Waiting)
-                // Main: Total time to START (Waiting + Sequence)
                 mainT = val + baseLen + orangeOffset;
-                // Sub: Time to First Signal (Waiting)
                 subT = val;
-                // Label: What is the first signal?
-                label = (orangeOffset > 0) ? "Orange Flag Display" : `${currentClass} Class Flag Display`;
+                label = (orangeOffset > 0) ? "ORANGE FLAG DISPLAY" : `${currentClass.toUpperCase()} CLASS FLAG`;
             }
             else if (mode === "pi") {
-                // Running Sequence
-                mainT = val; // Time to Start
-                
-                // Calculate Next Mark & Label
+                mainT = val;
+                // Next Event Logic
                 let marks = [];
-                // ADD MARKS WITH LABELS
-                if(orangeOffset > 0) marks.push({t: baseLen + orangeOffset, l: "Orange Flag Display"});
-                
-                if(currentRule === '3min') {
-                    marks.push({t: 180, l: `${currentClass} Class Flag Display`});
-                    marks.push({t: 120, l: `${currentPrep} Flag Display`});
-                    marks.push({t: 60, l: `${currentPrep} Flag Remove`});
-                    marks.push({t: 0, l: `${currentClass} Class Flag Remove`});
-                } else {
-                    marks.push({t: 300, l: `${currentClass} Class Flag Display`});
-                    marks.push({t: 240, l: `${currentPrep} Flag Display`});
-                    marks.push({t: 60, l: `${currentPrep} Flag Remove`});
-                    marks.push({t: 0, l: `${currentClass} Class Flag Remove`});
-                }
+                if(orangeOffset > 0) marks.push({t: baseLen + orangeOffset, l: "ORANGE FLAG DISPLAY"});
+                const std = (currentRule==='3min');
+                marks.push({t: std?180:300, l: `${currentClass.toUpperCase()} CLASS FLAG`});
+                marks.push({t: std?120:240, l: `${currentPrep.toUpperCase()} FLAG DISPLAY`});
+                marks.push({t: 60, l: `${currentPrep.toUpperCase()} FLAG REMOVE`});
+                marks.push({t: 0, l: `${currentClass.toUpperCase()} FLAG REMOVE`});
 
-                // Find largest mark smaller than current val (Next Event Down)
-                let nextObj = marks[marks.length-1]; // Default to start
-                for(let m of marks) {
-                    if (val > m.t) { nextObj = m; break; }
-                }
-                
+                let nextObj = marks[marks.length-1];
+                for(let m of marks) { if (val > m.t) { nextObj = m; break; } }
                 subT = val - nextObj.t;
                 label = nextObj.l;
             }
 
-            // Update DOM
-            const mM = Math.floor(mainT / 60);
-            const mS = mainT % 60;
+            const mM = Math.floor(mainT / 60); const mS = mainT % 60;
             document.getElementById('mainTimer').innerText = `${mM}:${mS.toString().padStart(2, '0')}`;
-            
-            const sM = Math.floor(subT / 60);
-            const sS = subT % 60;
+            const sM = Math.floor(subT / 60); const sS = subT % 60;
             document.getElementById('nextSignalTimer').innerText = `${sM}:${sS.toString().padStart(2, '0')}`;
             document.getElementById('nextSignalLabel').innerText = label;
+            
+            // Update Active Card Mini-Status
+            const activeC = document.querySelectorAll('.card')[activeCardIndex];
+            if(activeC) {
+                activeC.querySelector('.card-status').innerText = `T-MINUS ${mM}:${mS.toString().padStart(2, '0')}`;
+            }
         }
 
         function checkVoiceTriggers(t) {
             let marks = [];
-            if(currentRule === '3min') {
-                marks.push(180); marks.push(120); marks.push(60); marks.push(0);
-            } else {
-                marks.push(300); marks.push(240); marks.push(60); marks.push(0);
-            }
-            
-            if (orangeOffset > 0) {
-                 const base = (currentRule === '3min') ? 180 : 300;
-                 marks.unshift(base + orangeOffset);
-            }
+            const r3 = (currentRule === '3min');
+            marks.push(r3?180:300); marks.push(r3?120:240); marks.push(60); marks.push(0);
+            if (orangeOffset > 0) marks.unshift((r3?180:300) + orangeOffset);
 
             const triggers = [45, 30, 20, 15, 10, 5, 4, 3, 2, 1];
 
@@ -355,23 +400,20 @@
                 const diff = t - mark;
                 if (diff >= 0 && diff < 300) {
                     if (diff === 0) {
-                        if (mark > ((currentRule==='3min')?180:300)) speak("NOW! Orange Flag Display.");
-                        else if (mark === 300) speak(`NOW! ${currentClass} Class Flag Display.`);
-                        else if (mark === 180 && currentRule==='3min') speak(`NOW! ${currentClass} Class Flag Display.`);
-                        else if (mark === 240) speak(`NOW! ${currentPrep} Flag Display.`);
-                        else if (mark === 120 && currentRule==='3min') speak(`NOW! ${currentPrep} Flag Display.`);
-                        else if (mark === 60)  speak(`NOW! ${currentPrep} Flag Remove.`);
-                        else if (mark === 0)   speak(`NOW! ${currentClass} Class Flag Remove.`);
+                         // EVENT CONFIRMATIONS
+                         if (mark > (r3?180:300)) speak("NOW! Orange Flag Display.");
+                         else if (mark === (r3?180:300)) speak(`NOW! ${currentClass} Class Flag Display.`);
+                         else if (mark === (r3?120:240)) speak(`NOW! ${currentPrep} Flag Display.`);
+                         else if (mark === 60) speak(`NOW! ${currentPrep} Flag Remove.`);
+                         else if (mark === 0) speak(`NOW! ${currentClass} Class Flag Remove.`);
                     }
                     if (triggers.includes(diff)) {
                         let eventName = "";
-                        if (mark > ((currentRule==='3min')?180:300)) eventName = "Orange Flag Display";
-                        else if (mark === 300) eventName = `${currentClass} Class Flag Display`;
-                        else if (mark === 180 && currentRule==='3min') eventName = `${currentClass} Class Flag Display`;
-                        else if (mark === 240) eventName = `${currentPrep} Flag Display`;
-                        else if (mark === 120 && currentRule==='3min') eventName = `${currentPrep} Flag Display`;
-                        else if (mark === 60)  eventName = `${currentPrep} Flag Remove`;
-                        else if (mark === 0)   eventName = `${currentClass} Class Flag Remove`;
+                        if (mark > (r3?180:300)) eventName = "Orange Flag Display";
+                        else if (mark === (r3?180:300)) eventName = `${currentClass} Class Flag Display`;
+                        else if (mark === (r3?120:240)) eventName = `${currentPrep} Flag Display`;
+                        else if (mark === 60) eventName = `${currentPrep} Flag Remove`;
+                        else if (mark === 0) eventName = `${currentClass} Class Flag Remove`;
 
                         if (diff === 10) speak("10 seconds.");
                         else if (diff <= 5) speak(diff.toString());
@@ -381,90 +423,327 @@
             });
         }
 
-        function toggleCommit() {
-            if (!isCommitted) {
+        // --- BUTTONS & MODALS ---
+        function handleCommit() {
+            if(!isCommitted) {
+                const btn = document.getElementById('btnCommit');
+                // Check if time is set on first card
                 const cards = document.querySelectorAll('.card');
                 if(cards.length === 0) return;
-                isCommitted = true;
-                activeCardIndex = -1; 
-                document.getElementById('btnCommit').innerText = "SEQUENCE LOCKED IN. PRESS TO UNLOCK";
-                document.getElementById('btnCommit').className = "btn-commit locked";
-                cards.forEach(c => c.classList.add("locked"));
-                nextCard();
-            } else {
-                resetUI();
+                const firstId = cards[0].id.split('-')[1];
+                const timeInput = document.getElementById(`time-${firstId}`).value;
+
+                if(timeInput) {
+                    // Start Schedule
+                    isCommitted = true;
+                    btn.innerText = "LOCKED - SEQUENCE RUNNING";
+                    btn.className = "btn-commit locked";
+                    lockCards();
+                    nextCard();
+                } else {
+                    // Immediate Start Logic - Safety Catch
+                    if(btn.innerText === "PRESS AGAIN TO START") {
+                         isCommitted = true;
+                         btn.innerText = "LOCKED - SEQUENCE RUNNING";
+                         btn.className = "btn-commit locked";
+                         lockCards();
+                         nextCard();
+                    } else {
+                        btn.innerText = "PRESS AGAIN TO START";
+                        btn.className = "btn-commit ready";
+                    }
+                }
             }
         }
         
+        function lockCards() {
+             document.querySelectorAll('.card').forEach(c => c.classList.add('locked'));
+        }
+
+        function triggerAbandon() {
+            sendCommand({command: 'ABANDON'});
+            resetUI();
+            speak("Abandon. Abandon.");
+        }
+        
+        function sendXFlag() {
+            sendCommand({command: 'X_FLAG'});
+        }
+        
+        function triggerGenRecall() {
+            sendCommand({command: 'GEN_RECALL'});
+            showModal("Restart Current Class?", [
+                {text: "YES - RESTART", action: () => showRecallTimeOptions()},
+                {text: "NO - CONTINUE", action: closeModal}
+            ]);
+        }
+        
+        function showRecallTimeOptions() {
+            const opts = [
+                {text: "1 Minute", action: () => executeRecall(60)},
+                {text: "1 Round Min", action: () => executeRecall(calcRoundMin(1))},
+                {text: "2 Round Mins", action: () => executeRecall(calcRoundMin(2))},
+                {text: "3 Round Mins", action: () => executeRecall(calcRoundMin(3))},
+                {text: "Cancel", action: closeModal}
+            ];
+            showModal("Remove 1st Sub In...", opts);
+        }
+        
+        function executeRecall(gapSeconds) {
+            closeModal();
+            // 1. We are currently in a GAP (likely). We let it run? No, we interrupt.
+            // Actually, usually recall happens during the gap to next class.
+            if (gapInterval) clearInterval(gapInterval);
+            
+            // 2. Clone the active card (The one just finished/recalled)
+            // Note: activeCardIndex is currently pointing to the one that just started?
+            // If sequence finished, activeCardIndex moved to GAP card?
+            // Logic: If in Gap, previous start card was index - 1.
+            // Wait, our stack has gaps as cards? Yes.
+            // So if Start(0) finished -> Gap(1) is active.
+            // We want to restart Card(0).
+            
+            // Find the start card we just finished.
+            let cardToCloneIndex = activeCardIndex;
+            const cards = document.querySelectorAll('.card');
+            
+            // Backtrack to find start card
+            while(cardToCloneIndex >= 0) {
+                 if(cards[cardToCloneIndex].classList.contains('card-type-start')) break;
+                 cardToCloneIndex--;
+            }
+            
+            if(cardToCloneIndex < 0) return; // Error
+            const sourceCard = cards[cardToCloneIndex];
+            
+            // 3. Inject Sequence: [Removal Gap] -> [1 Min Gap] -> [Restart Card]
+            // We insert after the current active card (the gap we interrupted).
+            // Actually, we should replace the current gap or insert before it finishes?
+            // Simpler: Insert immediately after current, and force jump.
+            
+            // Create Clone Data
+            const id = sourceCard.id.split('-')[1];
+            const cloneData = {
+                class: document.getElementById(`class-${id}`).value,
+                prep: document.getElementById(`prep-${id}`).value,
+                rule: document.getElementById(`rule-${id}`).value,
+                orange: "0" // No orange flag for restart
+            };
+            
+            // INJECT CARDS
+            const anchor = cards[activeCardIndex]; // Current Gap
+            
+            // A. Removal Wait (Custom Gap)
+            const waitCard = createGapElement(gapSeconds, "Waiting to Remove 1st Sub");
+            anchor.after(waitCard);
+            
+            // B. 1 Min Rule Gap
+            const ruleGapCard = createGapElement(60, "1 Min Rule (RRS 29.2)");
+            waitCard.after(ruleGapCard);
+            
+            // C. Start Card
+            const startCard = createStartElement(cloneData);
+            ruleGapCard.after(startCard);
+            
+            // Reset Stack Order logic by just moving index forward?
+            // We are currently at 'anchor'. We want to move to 'waitCard'.
+            // nextCard() increments index. So if we just let nextCard call...
+            // But we interrupted the interval.
+            
+            // Force jump to next card (which is now waitCard)
+            nextCard();
+        }
+
+        function triggerAP() {
+            sendCommand({command: 'POSTPONE'});
+            // Stop timers
+            if(gapInterval) clearInterval(gapInterval);
+            if(scheduleInterval) clearInterval(scheduleInterval);
+            // AP Stops everything. UI Red.
+            document.body.style.border = "4px solid red";
+            
+            showModal("When to Remove AP?", [
+                {text: "1 Minute", action: () => executeAPRemoval(60)},
+                {text: "1 Round Min", action: () => executeAPRemoval(calcRoundMin(1))},
+                {text: "2 Round Mins", action: () => executeAPRemoval(calcRoundMin(2))},
+                {text: "Until Further Notice", action: () => waitForAPManual()},
+                {text: "Cancel / Reset", action: () => resetUI()}
+            ]);
+        }
+        
+        function executeAPRemoval(seconds) {
+            closeModal();
+            document.body.style.border = "none";
+            // Logic: Count down 'seconds' -> 1 Sound -> 1 Min Gap -> Start First Card.
+            // We effectively reset the stack index to -1, then inject the gaps at top.
+            
+            // Reset Stack pointer
+            document.querySelectorAll('.card').forEach(c => {c.classList.remove('active'); c.classList.add('locked');});
+            activeCardIndex = -1;
+            
+            // Inject at top
+            const stack = document.getElementById('sequence-stack');
+            
+            // 1. Wait Gap
+            const waitCard = createGapElement(seconds, "Waiting to Remove AP");
+            stack.prepend(waitCard);
+            
+            // 2. 1 Min Gap
+            const ruleGap = createGapElement(60, "1 Min Rule (AP Removed)");
+            waitCard.after(ruleGap);
+            
+            // Start
+            isCommitted = true;
+            nextCard();
+        }
+        
+        function waitForAPManual() {
+            closeModal();
+            // Add a temporary big button
+            const btn = document.createElement('button');
+            btn.innerText = "REMOVE AP NOW";
+            btn.style = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);padding:30px;font-size:1.5rem;background:red;color:white;border:none;border-radius:10px;z-index:4000;";
+            btn.onclick = () => {
+                btn.remove();
+                document.body.style.border = "none";
+                sendCommand({command: 'X_FLAG'}); // 1 Sound
+                // Insert 1 min gap then start
+                const stack = document.getElementById('sequence-stack');
+                const ruleGap = createGapElement(60, "1 Min Rule (AP Removed)");
+                stack.prepend(ruleGap);
+                
+                document.querySelectorAll('.card').forEach(c => {c.classList.remove('active'); c.classList.add('locked');});
+                activeCardIndex = -1;
+                isCommitted = true;
+                nextCard();
+            };
+            document.body.appendChild(btn);
+        }
+
+        // --- HELPERS ---
+        function calcRoundMin(mins) {
+            const now = new Date();
+            const s = now.getSeconds();
+            const remainingInMin = 60 - s;
+            return remainingInMin + ((mins - 1) * 60);
+        }
+        
+        function createGapElement(secs, title) {
+            const d = document.createElement('div');
+            const id = cardIdCounter++;
+            d.innerHTML = `
+                <div class="card" id="c-${id}" style="border-left-color: #ffc107">
+                    <div class="card-header">
+                        <div><span class="card-title">${title || "Gap"}</span></div>
+                        <span class="card-status">PENDING</span>
+                    </div>
+                    <div class="card-body">
+                         <input type="hidden" id="gap-${id}" value="${secs}">
+                         <div style="padding:10px;color:#888;">Duration: ${secs}s</div>
+                    </div>
+                </div>`;
+            return d.firstElementChild;
+        }
+        
+        function createStartElement(data) {
+             const d = document.createElement('div');
+             const id = cardIdCounter++;
+             d.innerHTML = `
+                <div class="card card-type-start" id="c-${id}" style="border-left-color: var(--primary)">
+                    <div class="card-header">
+                        <div><span class="card-title">${data.class || "Restart"}</span></div>
+                        <span class="card-status">PENDING</span>
+                    </div>
+                    <div class="card-body">
+                        <input type="hidden" id="class-${id}" value="${data.class}">
+                        <input type="hidden" id="prep-${id}" value="${data.prep}">
+                        <input type="hidden" id="rule-${id}" value="${data.rule}">
+                        <input type="hidden" id="orange-${id}" value="${data.orange}">
+                        <input type="hidden" id="time-${id}" value="">
+                        <div style="padding:10px;color:#888;">Restart Sequence (${data.rule === '3min' ? '3m' : '5m'})</div>
+                    </div>
+                </div>`;
+            return d.firstElementChild;
+        }
+
+        function showModal(title, buttons) {
+            const m = document.getElementById('modalOverlay');
+            const c = document.getElementById('modalContent');
+            c.innerHTML = `<h3>${title}</h3><div class="modal-btns"></div>`;
+            const bDiv = c.querySelector('.modal-btns');
+            buttons.forEach(b => {
+                const btn = document.createElement('button');
+                btn.className = 'btn-modal';
+                btn.innerText = b.text;
+                btn.onclick = b.action;
+                bDiv.appendChild(btn);
+            });
+            m.style.display = 'flex';
+        }
+        function closeModal() { document.getElementById('modalOverlay').style.display = 'none'; }
+
         function resetUI() {
-             if(!isCommitted && activeCardIndex === -1 && !gapInterval && !scheduleInterval) return;
-             isCommitted = false;
-             activeCardIndex = -1;
+             isCommitted = false; isRunning = false; activeCardIndex = -1;
              if(gapInterval) clearInterval(gapInterval);
              if(scheduleInterval) clearInterval(scheduleInterval);
-             gapInterval = null; scheduleInterval = null;
+             
              document.getElementById('btnCommit').innerText = "COMMIT TO SEQUENCE";
              document.getElementById('btnCommit').className = "btn-commit unlocked";
              document.querySelectorAll('.card').forEach(c => {
-                 c.classList.remove("locked");
-                 c.style.borderLeftWidth = "5px";
+                 c.classList.remove("locked"); c.classList.remove("active"); c.classList.remove("expanded");
+                 c.querySelector('.card-status').innerText = "PENDING";
              });
-             sendCommand({ command: 'POSTPONE' });
-             speak("Sequence Reset.");
+             sendCommand({ command: 'POSTPONE' }); // Ensure Stop
              document.getElementById('mainTimer').innerText = "00:00";
              document.getElementById('nextSignalTimer').innerText = "--:--";
-             document.getElementById('nextSignalLabel').innerText = "Next Signal";
-        }
-
-        async function sendCommand(jsonObj) {
-            if (!rxCharacteristic) return;
-            await rxCharacteristic.writeValue(new TextEncoder().encode(JSON.stringify(jsonObj)));
-        }
-
-        function startNow() {
-            if(isCommitted && activeCardIndex >= 0) {
-                if(scheduleInterval) firePiSequence();
-            } else { alert("Please Commit a Sequence first."); }
+             document.body.style.border = "none";
         }
         
-        function sendAP() { resetUI(); }
         function manualHorn(state) { state ? sendCommand({ command: 'HORN_ON' }) : sendCommand({ command: 'HORN_OFF' }); }
         function downloadLog() { logBuffer = ""; sendCommand({ command: 'GET_LOG' }); }
         function saveLogFile() {
             const blob = new Blob([logBuffer], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = 'race_log.csv';
+            const a = document.createElement('a'); a.href = url; a.download = 'race_log.csv';
             document.body.appendChild(a); a.click();
         }
         function updateTimeLabel(id) {
             const orangeVal = document.getElementById(`orange-${id}`).value;
             const label = document.getElementById(`time-label-${id}`);
-            if (orangeVal === "0") {
-                label.innerText = "Scheduled Warning Signal (Class Flag)";
-                label.style.color = "#b0b0b0";
-            } else {
-                label.innerText = "Scheduled Orange Flag Display";
-                label.style.color = "#ff9800";
-            }
+            if (orangeVal === "0") { label.innerText = "Scheduled Warning"; label.style.color = "#b0b0b0"; } 
+            else { label.innerText = "Scheduled Orange Flag"; label.style.color = "#ff9800"; }
         }
-
+        
+        // Card Init
         const stackEl = document.getElementById('sequence-stack');
         new Sortable(stackEl, { handle: '.drag-handle', animation: 150 });
         
+        // Collapse toggle
+        stackEl.addEventListener('click', (e) => {
+            if(e.target.closest('.card-header')) {
+                const c = e.target.closest('.card');
+                c.classList.toggle('expanded');
+            }
+        });
+
         function addStartCard() {
             const id = cardIdCounter++;
             stackEl.insertAdjacentHTML('beforeend', `
                 <div class="card card-type-start" id="c-${id}" style="border-left-color: var(--primary)">
                     <div class="card-header">
                         <div><span class="drag-handle">☰</span><span class="card-title">Start Sequence</span></div>
-                        <button onclick="this.closest('.card').remove()" style="background:none;border:none;color:#666">✕</button>
+                        <div style="display:flex;gap:10px;align-items:center;">
+                           <span class="card-status">PENDING</span>
+                           <button onclick="this.closest('.card').remove(); event.stopPropagation();" style="background:none;border:none;color:#666;font-size:1.2rem;">✕</button>
+                        </div>
                     </div>
-                    <div class="form-row"><label>Sequence Rule</label><select id="rule-${id}"><option value="std">Standard 5-Min (RRS 26)</option><option value="3min">3-Min (Appendix U)</option></select></div>
-                    <div class="form-row"><label>Class</label><select id="class-${id}"><option value="None">None (General)</option><option>Optimist Gold</option><option>Optimist Silver</option><option>ILCA 4</option><option>ILCA 6</option><option>ILCA 7</option><option>29er</option><option>49er</option><option>Techno293</option><option>Techno293Plus</option><option>iQ Foil</option><option>WingFoil</option><option>KiteFoil</option></select></div>
-                    <div class="form-row"><label>Prep Flag</label><select id="prep-${id}"><option value="P">P (Blue)</option><option value="U">U (Red/White)</option><option value="Black">Black</option></select></div>
-                    <div class="form-row"><label style="color:#ff9800">Orange Flag Sound</label><select id="orange-${id}" onchange="updateTimeLabel(${id})"><option value="0">No Orange Flag Needed</option><option value="1">1 Min before Class Flag</option><option value="4">4 Min before Class Flag</option><option value="5">5 Min before Class Flag</option></select></div>
-                    <div class="form-row"><label id="time-label-${id}">Scheduled Warning Signal (Class Flag)</label><input type="time" id="time-${id}"></div>
+                    <div class="card-body">
+                        <div class="form-row"><label>Sequence Rule</label><select id="rule-${id}"><option value="std">Standard 5-Min (RRS 26)</option><option value="3min">3-Min (Appendix U)</option></select></div>
+                        <div class="form-row"><label>Class</label><select id="class-${id}"><option value="None">None (General)</option><option>Optimist Gold</option><option>Optimist Silver</option><option>ILCA 4</option><option>ILCA 6</option><option>ILCA 7</option><option>29er</option><option>49er</option><option>Techno293</option><option>Techno293Plus</option><option>iQ Foil</option><option>WingFoil</option><option>KiteFoil</option></select></div>
+                        <div class="form-row"><label>Prep Flag</label><select id="prep-${id}"><option value="P">P (Blue)</option><option value="U">U (Red/White)</option><option value="Black">Black</option></select></div>
+                        <div class="form-row"><label style="color:#ff9800">Orange Flag Sound</label><select id="orange-${id}" onchange="updateTimeLabel(${id})"><option value="0">No Orange Flag Needed</option><option value="1">1 Min before Class Flag</option><option value="4">4 Min before Class Flag</option><option value="5">5 Min before Class Flag</option></select></div>
+                        <div class="form-row"><label id="time-label-${id}">Scheduled Warning Signal</label><input type="time" id="time-${id}"></div>
+                    </div>
                 </div>`);
         }
         function addGapCard() {
@@ -473,9 +752,14 @@
                 <div class="card" id="c-${id}" style="border-left-color: #ffc107">
                     <div class="card-header">
                         <div><span class="drag-handle">☰</span><span class="card-title">Gap / AP</span></div>
-                        <button onclick="this.closest('.card').remove()" style="background:none;border:none;color:#666">✕</button>
+                         <div style="display:flex;gap:10px;align-items:center;">
+                           <span class="card-status">PENDING</span>
+                           <button onclick="this.closest('.card').remove(); event.stopPropagation();" style="background:none;border:none;color:#666;font-size:1.2rem;">✕</button>
+                        </div>
                     </div>
-                    <div class="form-row"><label>Duration</label><select id="gap-${id}"><option value="0">Immediate (Rolling)</option><option value="60">1 Min</option><option value="120">2 Min</option><option value="180">3 Min</option><option value="240">4 Min</option><option value="300">5 Min</option><option value="600">10 Min</option></select></div>
+                    <div class="card-body">
+                        <div class="form-row"><label>Duration</label><select id="gap-${id}"><option value="0">Immediate (Rolling)</option><option value="60">1 Min</option><option value="120">2 Min</option><option value="180">3 Min</option><option value="240">4 Min</option><option value="300">5 Min</option><option value="600">10 Min</option></select></div>
+                    </div>
                 </div>`);
         }
         addStartCard();
