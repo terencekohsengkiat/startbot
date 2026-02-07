@@ -43,6 +43,10 @@
         
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
 
+        /* ADD BUTTONS */
+        .add-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
+        .btn-add { width: 50px; height: 50px; border-radius: 50%; border: none; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; background: #444; color: white; }
+
         /* FOOTER */
         .control-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #000; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #333; z-index: 2000; }
         .status-text { font-size: 0.8rem; color: #666; }
@@ -73,6 +77,10 @@
 
     <div class="container">
         <div id="sequence-stack">
+            </div>
+        
+        <div class="add-buttons">
+            <button class="btn-add" onclick="addStartCard()" style="background: var(--primary)">+</button>
             </div>
 
         <div class="commit-zone">
@@ -158,22 +166,47 @@
                 } else {
                     document.getElementById('btnStart').style.display = 'block';
                     document.getElementById('btnAP').style.display = 'none';
+                    // If Stopped/AP was triggered externally
+                    if(data.status === "Stopped" && isCommitted) {
+                         resetUI();
+                    }
                 }
             } catch (e) {}
         }
 
         function updateTimers(t) {
-            // Main Timer
+            if (t === 0) {
+                 document.getElementById('mainTimer').innerText = "00:00";
+                 document.getElementById('nextSignalTimer').innerText = "--:--";
+                 return;
+            }
+
             const mins = Math.floor(t / 60);
             const secs = t % 60;
             document.getElementById('mainTimer').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
             
-            // Next Signal Timer Logic
+            // Dynamic Next Signal Timer
+            // Check marks based on Orange Offset
+            const marks = [];
+            if(orangeOffset > 0) marks.push(300 + orangeOffset);
+            marks.push(300);
+            marks.push(240);
+            marks.push(60);
+            marks.push(0);
+            
             let nextMark = 0;
-            if (t > 300) nextMark = 300;     // Before Warning
-            else if (t > 240) nextMark = 240; // Before Prep
-            else if (t > 60) nextMark = 60;   // Before 1-Min
-            else nextMark = 0;                // Before Start
+            // Find the first mark that is smaller than current t
+            // Actually we want the largest mark that is < t. 
+            // Wait, t counts DOWN. So we want the next mark that t will reach.
+            // t is e.g. 600. Next mark is 600. 
+            // t is 599. Next mark is 300.
+            
+            for(let m of marks) {
+                if (t > m) {
+                    nextMark = m;
+                    break;
+                }
+            }
             
             const diff = t - nextMark;
             const dMins = Math.floor(diff / 60);
@@ -181,16 +214,11 @@
             document.getElementById('nextSignalTimer').innerText = `${dMins}:${dSecs.toString().padStart(2, '0')}`;
         }
 
-        // --- VOICE LOGIC (APPROVED SCRIPT) ---
+        // --- VOICE LOGIC (DYNAMIC FIX) ---
         function checkVoiceTriggers(t) {
-            // Calculate effective marks based on orange flag offset
-            const isOrangeActive = (orangeOffset > 0);
-            
-            // Define Marks
+            // Define Marks dynamically
             let marks = [];
-            // If Orange Flag is active, add its start time (e.g., 600s or 10:00)
-            if (isOrangeActive) marks.push(300 + orangeOffset); // e.g. 300+300 = 600
-            
+            if (orangeOffset > 0) marks.push(300 + orangeOffset); // Start of Orange
             marks.push(300); // Warning
             marks.push(240); // Prep
             marks.push(60);  // One Min
@@ -201,29 +229,32 @@
             marks.forEach(mark => {
                 const diff = t - mark;
                 
-                // EVENTS (The "NOW!" moments)
-                if (diff === 0) {
-                    if (mark > 300) speak("NOW! Orange Flag Display."); // 10:00
-                    if (mark === 300) speak(`NOW! ${currentClass} Class Flag Display.`);
-                    if (mark === 240) speak(`NOW! ${currentPrep} Flag Display.`);
-                    if (mark === 60)  speak(`NOW! ${currentPrep} Flag Remove.`);
-                    if (mark === 0)   speak(`NOW! ${currentClass} Class Flag Remove.`);
-                }
+                // Only process if we are approaching this specific mark (positive diff)
+                // and we are not way past it (e.g. diff < 300)
+                if (diff >= 0 && diff < 300) {
+                    
+                    // EVENTS ("NOW!")
+                    if (diff === 0) {
+                        if (mark > 300) speak("NOW! Orange Flag Display."); 
+                        if (mark === 300) speak(`NOW! ${currentClass} Class Flag Display.`);
+                        if (mark === 240) speak(`NOW! ${currentPrep} Flag Display.`);
+                        if (mark === 60)  speak(`NOW! ${currentPrep} Flag Remove.`);
+                        if (mark === 0)   speak(`NOW! ${currentClass} Class Flag Remove.`);
+                    }
 
-                // COUNTDOWNS
-                if (triggers.includes(diff)) {
-                    // Determine Event Name for speech
-                    let eventName = "";
-                    if (mark > 300) eventName = "Orange Flag Display";
-                    else if (mark === 300) eventName = `${currentClass} Class Flag Display`;
-                    else if (mark === 240) eventName = `${currentPrep} Flag Display`;
-                    else if (mark === 60)  eventName = `${currentPrep} Flag Remove`;
-                    else if (mark === 0)   eventName = `${currentClass} Class Flag Remove`;
+                    // COUNTDOWNS
+                    if (triggers.includes(diff)) {
+                        let eventName = "";
+                        if (mark > 300) eventName = "Orange Flag Display";
+                        else if (mark === 300) eventName = `${currentClass} Class Flag Display`;
+                        else if (mark === 240) eventName = `${currentPrep} Flag Display`;
+                        else if (mark === 60)  eventName = `${currentPrep} Flag Remove`;
+                        else if (mark === 0)   eventName = `${currentClass} Class Flag Remove`;
 
-                    // Specific phrasing
-                    if (diff === 10) speak("10 seconds.");
-                    else if (diff <= 5) speak(diff.toString());
-                    else speak(`${diff} seconds to ${eventName}.`);
+                        if (diff === 10) speak("10 seconds.");
+                        else if (diff <= 5) speak(diff.toString());
+                        else speak(`${diff} seconds to ${eventName}.`);
+                    }
                 }
             });
         }
@@ -240,17 +271,19 @@
                 isCommitted = true;
                 btn.innerText = "SEQUENCE LOCKED IN. PRESS TO UNLOCK";
                 btn.className = "btn-commit locked";
-                card.classList.add("locked");
                 
-                // Read Values
+                // Lock all cards
+                document.querySelectorAll('.card').forEach(c => c.classList.add("locked"));
+                
+                // Read Values from Top Card
                 const id = card.id.split('-')[1];
                 currentClass = document.getElementById(`class-${id}`).value;
-                if(currentClass === "None") currentClass = ""; // Handle "None"
+                if(currentClass === "None") currentClass = ""; 
                 
                 currentPrep = document.getElementById(`prep-${id}`).value;
                 
                 const orangeVal = document.getElementById(`orange-${id}`).value;
-                orangeOffset = parseInt(orangeVal) * 60; // Convert min to sec
+                orangeOffset = parseInt(orangeVal) * 60; 
                 
                 const timeInput = document.getElementById(`time-${id}`).value;
                 
@@ -263,14 +296,18 @@
                 }
 
             } else {
-                // UNLOCK IT
-                isCommitted = false;
-                btn.innerText = "COMMIT TO SEQUENCE";
-                btn.className = "btn-commit unlocked";
-                card.classList.remove("locked");
-                if(checkScheduleInterval) clearInterval(checkScheduleInterval);
-                speak("Sequence Unlocked.");
+                resetUI();
             }
+        }
+        
+        function resetUI() {
+             isCommitted = false;
+             const btn = document.getElementById('btnCommit');
+             btn.innerText = "COMMIT TO SEQUENCE";
+             btn.className = "btn-commit unlocked";
+             document.querySelectorAll('.card').forEach(c => c.classList.remove("locked"));
+             if(checkScheduleInterval) clearInterval(checkScheduleInterval);
+             speak("Sequence Unlocked.");
         }
 
         function startScheduleWatcher(targetTimeStr) {
@@ -282,7 +319,7 @@
                 
                 if (nowStr === targetTimeStr) {
                     clearInterval(checkScheduleInterval);
-                    fireSequence(); // Auto-fire!
+                    fireSequence(); 
                 }
             }, 1000);
         }
@@ -308,16 +345,15 @@
         }
 
         function fireSequence() {
-            // Calculate total seconds to send to Pi
-            // Standard = 300s (5m). If Orange offset is 300s (5m), total is 600s.
-            // Add 5s buffer for voice intro.
             const duration = 305 + orangeOffset;
-            
             sendCommand({ command: 'START_SEQUENCE', seconds: duration });
             speak("Sequence Initiated.");
         }
 
-        function sendAP() { sendCommand({ command: 'POSTPONE' }); }
+        function sendAP() { 
+            sendCommand({ command: 'POSTPONE' }); 
+            resetUI(); // UI Reset on AP
+        }
         
         function manualHorn(state) {
             if(state) sendCommand({ command: 'HORN_ON' });
@@ -353,17 +389,15 @@
 
         // --- CARD UI ---
         const stackEl = document.getElementById('sequence-stack');
-        // new Sortable(stackEl, { handle: '.drag-handle', animation: 150 });
+        new Sortable(stackEl, { handle: '.drag-handle', animation: 150 }); // Re-enabled
 
         function addStartCard() {
-            // Only allow 1 start card for this version to keep logic simple
-            if(document.querySelector('.card-type-start')) return; 
-
             const id = cardIdCounter++;
             stackEl.insertAdjacentHTML('beforeend', `
                 <div class="card card-type-start" id="c-${id}" style="border-left-color: var(--primary)">
                     <div class="card-header">
-                        <div><span class="card-title">Start Sequence</span></div>
+                        <div><span class="drag-handle">☰</span><span class="card-title">Start Sequence</span></div>
+                        <button onclick="this.closest('.card').remove()" style="background:none;border:none;color:#666">✕</button>
                     </div>
                     
                     <div class="form-row">
@@ -397,6 +431,7 @@
                     <div class="form-row">
                         <label style="color:#ff9800">Orange Flag Sound</label>
                         <select id="orange-${id}" onchange="updateTimeLabel(${id})">
+                            <option value="0">No Orange Flag Needed (Standard)</option>
                             <option value="0">On START (of sequence)</option>
                             <option value="1">1 Min before Class Flag</option>
                             <option value="4">4 Min before Class Flag</option>
@@ -405,7 +440,7 @@
                     </div>
 
                     <div class="form-row">
-                        <label id="time-label-${id}">Scheduled Warning Signal</label>
+                        <label id="time-label-${id}">Scheduled Warning Signal (Class Flag)</label>
                         <input type="time" id="time-${id}">
                     </div>
                 </div>`);
