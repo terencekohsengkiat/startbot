@@ -177,8 +177,11 @@
             const cards = Array.from(document.querySelectorAll('.card'));
             activeCardIndex++;
             if (activeCardIndex >= cards.length) {
-                speak("Regatta Sequence Complete.");
-                resetUI();
+                // DELAYED COMPLETION MSG (Prevent clash with Flag Remove)
+                setTimeout(() => {
+                    speak("Regatta Sequence Complete.");
+                    resetUI();
+                }, 3000);
                 return;
             }
             const card = cards[activeCardIndex];
@@ -246,7 +249,10 @@
                     
                     if ([45, 30, 20, 15, 10, 5, 4, 3, 2, 1].includes(diff)) {
                          let msg = (orangeOffset > 0) ? "Orange Flag Display" : `${currentClass} Class Flag Display`;
-                         if(diff <= 5) speak(diff.toString());
+                         
+                         // FIX: FORCE 10 SECONDS
+                         if (diff === 10) speak("10 seconds.");
+                         else if(diff <= 5) speak(diff.toString());
                          else speak(`${diff} seconds to ${msg}`);
                      }
                 }
@@ -255,13 +261,17 @@
 
         function firePiSequence() {
             if(scheduleInterval) clearInterval(scheduleInterval);
+            
+            // FIX: SPECIFIC "NOW" MESSAGE (REPLACES "SEQUENCE INITIATED")
+            if (orangeOffset > 0) speak("NOW! Orange Flag Display.");
+            else speak(`NOW! ${currentClass} Class Flag Display.`);
+            
             const baseLen = (currentRule === '3min') ? 180 : 300;
             const duration = baseLen + orangeOffset;
             sendCommand({ command: 'START_SEQUENCE', seconds: duration, rule: currentRule });
-            speak("Sequence Initiated.");
         }
 
-        // --- ENHANCED TIMER UI (DYNAMIC LABELS) ---
+        // --- ENHANCED TIMER UI ---
         function updateTimers(val, mode) {
             if(val < 0) val = 0;
             const baseLen = (currentRule === '3min') ? 180 : 300;
@@ -281,6 +291,7 @@
                 mainT = val + baseLen + orangeOffset;
                 // Sub: Time to First Signal (Waiting)
                 subT = val;
+                // Label: What is the first signal?
                 label = (orangeOffset > 0) ? "Orange Flag Display" : `${currentClass} Class Flag Display`;
             }
             else if (mode === "pi") {
