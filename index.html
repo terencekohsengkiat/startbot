@@ -40,7 +40,6 @@
         .btn-commit { width: 100%; padding: 15px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; transition: all 0.3s; text-transform: uppercase; }
         .btn-commit.unlocked { background: var(--primary); color: white; }
         .btn-commit.locked { background: var(--danger); color: white; animation: pulse 2s infinite; }
-        
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
 
         /* ADD BUTTONS */
@@ -69,19 +68,18 @@
                 onpointerup="manualHorn(false)" 
                 onpointerleave="manualHorn(false)"
                 oncontextmenu="return false;">HORN</button>
-            
             <button id="btnStart" class="btn-action btn-start" onclick="startNow()">START<br>NOW</button>
             <button id="btnAP" class="btn-action btn-ap" onclick="sendAP()">AP</button>
         </div>
     </div>
 
     <div class="container">
-        <div id="sequence-stack">
-            </div>
+        <div id="sequence-stack"></div>
         
         <div class="add-buttons">
             <button class="btn-add" onclick="addStartCard()" style="background: var(--primary)">+</button>
-            </div>
+            <button class="btn-add" onclick="addGapCard()" style="background: #ffc107; color: black">⏳</button>
+        </div>
 
         <div class="commit-zone">
             <button id="btnCommit" class="btn-commit unlocked" onclick="toggleCommit()">COMMIT TO SEQUENCE</button>
@@ -105,13 +103,26 @@
         let cardIdCounter = 0;
         let logBuffer = "";
         let speechEnabled = false;
-        let isCommitted = false;
-        let checkScheduleInterval = null;
+        let wakeLock = null;
         
-        // Settings Data Storage
+        // State
+        let isCommitted = false;
+        let activeCardIndex = -1;
+        let gapInterval = null;
+        let scheduleInterval = null;
+        
+        // Active Card Config
         let currentClass = "";
         let currentPrep = "";
         let orangeOffset = 0; 
+        
+        // --- WAKE LOCK ---
+        async function requestWakeLock() {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                wakeLock.addEventListener('release', () => { console.log('Wake Lock released'); });
+            } catch (err) { console.log(`${err.name}, ${err.message}`); }
+        }
 
         // --- AUDIO ENGINE ---
         function speak(text) {
@@ -126,6 +137,7 @@
         async function connectBluetooth() {
             try {
                 speechEnabled = true;
+                requestWakeLock();
                 speak("System Ready.");
                 bluetoothDevice = await navigator.bluetooth.requestDevice({ filters: [{ name: 'StartBot' }], optionalServices: [SERVICE_UUID] });
                 bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
@@ -146,6 +158,7 @@
             document.getElementById('statusText').innerText = "Disconnected";
             document.getElementById('btnConnect').style.display = 'block';
             speak("Connection Lost");
+            resetUI();
         }
 
         function handleNotifications(event) {
@@ -156,84 +169,216 @@
                 if (data.log_end) saveLogFile();
                 
                 if (data.time !== undefined) {
+                    // Update UI and check voice for Active Sequence
                     updateTimers(data.time);
                     checkVoiceTriggers(data.time);
                 }
                 
+                // State Management
                 if (data.status === "Running") {
                     document.getElementById('btnStart').style.display = 'none';
                     document.getElementById('btnAP').style.display = 'block';
-                } else {
+                } else if (data.status === "Finished" || data.status === "Stopped") {
                     document.getElementById('btnStart').style.display = 'block';
                     document.getElementById('btnAP').style.display = 'none';
-                    // If Stopped/AP was triggered externally
-                    if(data.status === "Stopped" && isCommitted) {
-                         resetUI();
+                    
+                    // IF we are in a sequence and it finished naturally, trigger NEXT
+                    if (isCommitted && data.status === "Finished") {
+                        nextCard();
+                    } else if (data.status === "Stopped") {
+                        // Manual Stop / AP
+                        resetUI();
                     }
                 }
             } catch (e) {}
         }
 
-        function updateTimers(t) {
-            if (t === 0) {
-                 document.getElementById('mainTimer').innerText = "00:00";
-                 document.getElementById('nextSignalTimer').innerText = "--:--";
-                 return;
+        // --- PLAYLIST LOGIC ---
+        
+        function nextCard() {
+            const cards = Array.from(document.querySelectorAll('.card'));
+            activeCardIndex++;
+            
+            if (activeCardIndex >= cards.length) {
+                // End of Playlist
+                speak("Regatta Sequence Complete.");
+                resetUI();
+                return;
             }
+            
+            const card = cards[activeCardIndex];
+            
+            // Highlight active card
+            cards.forEach(c => c.style.borderLeftWidth = "5px");
+            card.style.borderLeftWidth = "15px"; 
+            
+            // Check Type
+            if (card.classList.contains('card-type-start')) {
+                executeStartCard(card);
+            } else {
+                executeGapCard(card);
+            }
+        }
+        
+        function executeStartCard(card) {
+            // Read Values
+            const id = card.id.split('-')[1];
+            currentClass = document.getElementById(`class-${id}`).value;
+            if(currentClass === "None") currentClass = ""; 
+            currentPrep = document.getElementById(`prep-${id}`).value;
+            const orangeVal = document.getElementById(`orange-${id}`).value;
+            orangeOffset = parseInt(orangeVal) * 60; 
+            
+            // Check Schedule (Only applies to the FIRST card if it has a time)
+            const timeInput = document.getElementById(`time-${id}`).value;
+            
+            // If this is the FIRST card and has a time, we wait.
+            // But if we are in the middle of a playlist (index > 0), we just go (unless time is set? No, playlist implies flow).
+            // Simplified: If Time Input exists AND we are at index 0, we count down to it.
+            if (activeCardIndex === 0 && timeInput) {
+                startScheduleWatcher(timeInput);
+                speak(`Sequence Armed for ${timeInput}`);
+            } else {
+                // Immediate Fire
+                firePiSequence();
+            }
+        }
+        
+        function executeGapCard(card) {
+            const id = card.id.split('-')[1];
+            const durationVal = document.getElementById(`gap-${id}`).value;
+            let seconds = parseInt(durationVal);
+            
+            if (seconds === 0) {
+                // Rolling
+                nextCard();
+                return;
+            }
+            
+            speak(`Gap. ${seconds/60} minutes.`);
+            
+            // Run Gap Timer on Phone
+            let gapTime = seconds;
+            updateTimers(gapTime); // Initial Show
+            
+            gapInterval = setInterval(() => {
+                gapTime--;
+                updateTimers(gapTime);
+                
+                // Voice for Gap (Simple)
+                if(gapTime === 60) speak("One minute to next sequence.");
+                if(gapTime === 10) speak("Ten seconds.");
+                if(gapTime <= 5 && gapTime > 0) speak(gapTime.toString());
+                
+                if (gapTime <= 0) {
+                    clearInterval(gapInterval);
+                    nextCard(); // Move on
+                }
+            }, 1000);
+        }
 
+        // --- TIMING LOGIC ---
+
+        function startScheduleWatcher(targetTimeStr) {
+            if(scheduleInterval) clearInterval(scheduleInterval);
+            
+            // We need to countdown nicely
+            scheduleInterval = setInterval(() => {
+                const now = new Date();
+                const nowStr = now.toTimeString().slice(0, 5); // "14:00"
+                
+                // Calculate seconds until target (for UI)
+                const target = new Date();
+                const [h, m] = targetTimeStr.split(':');
+                target.setHours(h, m, 0, 0);
+                
+                let diff = Math.floor((target - now) / 1000);
+                
+                if (diff < 0) {
+                    // Time passed? Fire immediately or handled?
+                    clearInterval(scheduleInterval);
+                    firePiSequence();
+                } else {
+                    // Update UI and Voice
+                    updateTimers(diff);
+                    
+                    // Voice Triggers for Pre-Roll
+                    // Note: 'diff' is time TO the start command.
+                    // If orangeOffset is 0, Start Command = Warning Signal (300).
+                    // So if diff = 60, we are 60s from Warning.
+                    // We need to map 'diff' to the Regatta Time Scale.
+                    
+                    // The Regatta Scale: 
+                    // Orange Start = 300 + orangeOffset.
+                    // Warning = 300.
+                    
+                    // Actually, simpler:
+                    // If we are waiting for a start time, that start time IS the trigger for the Pi.
+                    // The Pi starts at (305 + orangeOffset).
+                    // So 'diff' seconds before the Pi starts means we are 'diff' seconds before the First Horn.
+                    
+                    // Just count down 45, 30, 10 to the "Start of Sequence"
+                     if ([45, 30, 20, 15, 10, 5, 4, 3, 2, 1].includes(diff)) {
+                         let msg = "";
+                         // What is the first event?
+                         if (orangeOffset > 0) msg = "Orange Flag Display";
+                         else msg = `${currentClass} Class Flag Display`;
+                         
+                         if(diff <= 5) speak(diff.toString());
+                         else speak(`${diff} seconds to ${msg}`);
+                     }
+                }
+            }, 1000);
+        }
+
+        function firePiSequence() {
+            if(scheduleInterval) clearInterval(scheduleInterval);
+            const duration = 305 + orangeOffset;
+            sendCommand({ command: 'START_SEQUENCE', seconds: duration });
+            speak("Sequence Initiated.");
+        }
+
+        // --- UI UPDATES ---
+
+        function updateTimers(t) {
+            if(t < 0) t = 0;
             const mins = Math.floor(t / 60);
             const secs = t % 60;
             document.getElementById('mainTimer').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
             
-            // Dynamic Next Signal Timer
-            // Check marks based on Orange Offset
-            const marks = [];
+            // Next Signal Logic
+            // If we are in Gap or Schedule mode, Next Signal is 0 (The start)
+            if (gapInterval || scheduleInterval) {
+                 document.getElementById('nextSignalTimer').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
+                 return;
+            }
+
+            // If running Pi logic
+            let marks = [];
             if(orangeOffset > 0) marks.push(300 + orangeOffset);
-            marks.push(300);
-            marks.push(240);
-            marks.push(60);
-            marks.push(0);
+            marks.push(300); marks.push(240); marks.push(60); marks.push(0);
             
             let nextMark = 0;
-            // Find the first mark that is smaller than current t
-            // Actually we want the largest mark that is < t. 
-            // Wait, t counts DOWN. So we want the next mark that t will reach.
-            // t is e.g. 600. Next mark is 600. 
-            // t is 599. Next mark is 300.
-            
             for(let m of marks) {
-                if (t > m) {
-                    nextMark = m;
-                    break;
-                }
+                if (t > m) { nextMark = m; break; }
             }
-            
             const diff = t - nextMark;
             const dMins = Math.floor(diff / 60);
             const dSecs = diff % 60;
             document.getElementById('nextSignalTimer').innerText = `${dMins}:${dSecs.toString().padStart(2, '0')}`;
         }
 
-        // --- VOICE LOGIC (DYNAMIC FIX) ---
         function checkVoiceTriggers(t) {
-            // Define Marks dynamically
+            // Define Marks
             let marks = [];
-            if (orangeOffset > 0) marks.push(300 + orangeOffset); // Start of Orange
-            marks.push(300); // Warning
-            marks.push(240); // Prep
-            marks.push(60);  // One Min
-            marks.push(0);   // Start
+            if (orangeOffset > 0) marks.push(300 + orangeOffset); 
+            marks.push(300); marks.push(240); marks.push(60); marks.push(0);
 
             const triggers = [45, 30, 20, 15, 10, 5, 4, 3, 2, 1];
 
             marks.forEach(mark => {
                 const diff = t - mark;
-                
-                // Only process if we are approaching this specific mark (positive diff)
-                // and we are not way past it (e.g. diff < 300)
                 if (diff >= 0 && diff < 300) {
-                    
-                    // EVENTS ("NOW!")
                     if (diff === 0) {
                         if (mark > 300) speak("NOW! Orange Flag Display."); 
                         if (mark === 300) speak(`NOW! ${currentClass} Class Flag Display.`);
@@ -241,8 +386,6 @@
                         if (mark === 60)  speak(`NOW! ${currentPrep} Flag Remove.`);
                         if (mark === 0)   speak(`NOW! ${currentClass} Class Flag Remove.`);
                     }
-
-                    // COUNTDOWNS
                     if (triggers.includes(diff)) {
                         let eventName = "";
                         if (mark > 300) eventName = "Orange Flag Display";
@@ -259,42 +402,23 @@
             });
         }
 
-        // --- LOGIC & COMMITTING ---
+        // --- BUTTONS & COMMANDS ---
         
         function toggleCommit() {
-            const btn = document.getElementById('btnCommit');
-            const card = document.querySelector('.card-type-start');
-            if(!card) return;
-
             if (!isCommitted) {
-                // LOCK IT
+                // START / ARM
+                const cards = document.querySelectorAll('.card');
+                if(cards.length === 0) return;
+                
                 isCommitted = true;
-                btn.innerText = "SEQUENCE LOCKED IN. PRESS TO UNLOCK";
-                btn.className = "btn-commit locked";
+                activeCardIndex = -1; // Reset
                 
-                // Lock all cards
-                document.querySelectorAll('.card').forEach(c => c.classList.add("locked"));
+                document.getElementById('btnCommit').innerText = "SEQUENCE LOCKED IN. PRESS TO UNLOCK";
+                document.getElementById('btnCommit').className = "btn-commit locked";
+                cards.forEach(c => c.classList.add("locked"));
                 
-                // Read Values from Top Card
-                const id = card.id.split('-')[1];
-                currentClass = document.getElementById(`class-${id}`).value;
-                if(currentClass === "None") currentClass = ""; 
+                nextCard(); // Start the first card logic
                 
-                currentPrep = document.getElementById(`prep-${id}`).value;
-                
-                const orangeVal = document.getElementById(`orange-${id}`).value;
-                orangeOffset = parseInt(orangeVal) * 60; 
-                
-                const timeInput = document.getElementById(`time-${id}`).value;
-                
-                // Start Schedule Watcher
-                if (timeInput) {
-                    startScheduleWatcher(timeInput);
-                    speak(`Sequence Armed for ${timeInput}`);
-                } else {
-                    speak("Sequence Armed. Waiting for manual start.");
-                }
-
             } else {
                 resetUI();
             }
@@ -302,62 +426,50 @@
         
         function resetUI() {
              isCommitted = false;
-             const btn = document.getElementById('btnCommit');
-             btn.innerText = "COMMIT TO SEQUENCE";
-             btn.className = "btn-commit unlocked";
-             document.querySelectorAll('.card').forEach(c => c.classList.remove("locked"));
-             if(checkScheduleInterval) clearInterval(checkScheduleInterval);
-             speak("Sequence Unlocked.");
+             activeCardIndex = -1;
+             if(gapInterval) clearInterval(gapInterval);
+             if(scheduleInterval) clearInterval(scheduleInterval);
+             gapInterval = null;
+             scheduleInterval = null;
+             
+             document.getElementById('btnCommit').innerText = "COMMIT TO SEQUENCE";
+             document.getElementById('btnCommit').className = "btn-commit unlocked";
+             document.querySelectorAll('.card').forEach(c => {
+                 c.classList.remove("locked");
+                 c.style.borderLeftWidth = "5px";
+             });
+             
+             sendCommand({ command: 'POSTPONE' }); // Ensure Pi stops
+             speak("Sequence Reset.");
+             document.getElementById('mainTimer').innerText = "00:00";
         }
 
-        function startScheduleWatcher(targetTimeStr) {
-            if(checkScheduleInterval) clearInterval(checkScheduleInterval);
-            
-            checkScheduleInterval = setInterval(() => {
-                const now = new Date();
-                const nowStr = now.toTimeString().slice(0, 5); // "14:00"
-                
-                if (nowStr === targetTimeStr) {
-                    clearInterval(checkScheduleInterval);
-                    fireSequence(); 
-                }
-            }, 1000);
-        }
-
-        // --- COMMANDS ---
         async function sendCommand(jsonObj) {
             if (!rxCharacteristic) return;
             await rxCharacteristic.writeValue(new TextEncoder().encode(JSON.stringify(jsonObj)));
         }
 
         function startNow() {
-            // Start Now button bypasses commit check, but grabs values if possible
-            const card = document.querySelector('.card-type-start');
-            if(card) {
-                const id = card.id.split('-')[1];
-                currentClass = document.getElementById(`class-${id}`).value;
-                if(currentClass === "None") currentClass = "";
-                currentPrep = document.getElementById(`prep-${id}`).value;
-                const orangeVal = document.getElementById(`orange-${id}`).value;
-                orangeOffset = parseInt(orangeVal) * 60;
+            // Immediate Start override
+            // Ideally this injects an immediate start card or forces current card
+            if(isCommitted && activeCardIndex >= 0) {
+                // We are waiting for schedule?
+                if(scheduleInterval) {
+                    firePiSequence();
+                }
+            } else {
+                 // Not committed? Just grab top card defaults and fire
+                 // Simplified for safety: Start Now only valid if cards exist
+                 alert("Please Commit a Sequence first, then wait for schedule or press Start Now to override timer.");
             }
-            fireSequence();
         }
-
-        function fireSequence() {
-            const duration = 305 + orangeOffset;
-            sendCommand({ command: 'START_SEQUENCE', seconds: duration });
-            speak("Sequence Initiated.");
-        }
-
+        
         function sendAP() { 
-            sendCommand({ command: 'POSTPONE' }); 
-            resetUI(); // UI Reset on AP
+            resetUI();
         }
         
         function manualHorn(state) {
-            if(state) sendCommand({ command: 'HORN_ON' });
-            else sendCommand({ command: 'HORN_OFF' });
+            state ? sendCommand({ command: 'HORN_ON' }) : sendCommand({ command: 'HORN_OFF' });
         }
         
         function downloadLog() { 
@@ -373,11 +485,9 @@
             document.body.appendChild(a); a.click();
         }
 
-        // --- DYNAMIC UI UPDATES ---
         function updateTimeLabel(id) {
             const orangeVal = document.getElementById(`orange-${id}`).value;
             const label = document.getElementById(`time-label-${id}`);
-            
             if (orangeVal === "0") {
                 label.innerText = "Scheduled Warning Signal (Class Flag)";
                 label.style.color = "#b0b0b0";
@@ -387,9 +497,9 @@
             }
         }
 
-        // --- CARD UI ---
+        // --- CARD MANAGEMENT ---
         const stackEl = document.getElementById('sequence-stack');
-        new Sortable(stackEl, { handle: '.drag-handle', animation: 150 }); // Re-enabled
+        new Sortable(stackEl, { handle: '.drag-handle', animation: 150 });
 
         function addStartCard() {
             const id = cardIdCounter++;
@@ -399,54 +509,25 @@
                         <div><span class="drag-handle">☰</span><span class="card-title">Start Sequence</span></div>
                         <button onclick="this.closest('.card').remove()" style="background:none;border:none;color:#666">✕</button>
                     </div>
-                    
-                    <div class="form-row">
-                        <label>Class</label>
-                        <select id="class-${id}">
-                            <option value="None">None (General)</option>
-                            <option>Optimist Gold</option>
-                            <option>Optimist Silver</option>
-                            <option>ILCA 4</option>
-                            <option>ILCA 6</option>
-                            <option>ILCA 7</option>
-                            <option>29er</option>
-                            <option>49er</option>
-                            <option>Techno293</option>
-                            <option>Techno293Plus</option>
-                            <option>iQ Foil</option>
-                            <option>WingFoil</option>
-                            <option>KiteFoil</option>
-                        </select>
-                    </div>
-
-                    <div class="form-row">
-                        <label>Prep Flag</label>
-                        <select id="prep-${id}">
-                            <option value="P">P (Blue)</option>
-                            <option value="U">U (Red/White)</option>
-                            <option value="Black">Black</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-row">
-                        <label style="color:#ff9800">Orange Flag Sound</label>
-                        <select id="orange-${id}" onchange="updateTimeLabel(${id})">
-                            <option value="0">No Orange Flag Needed (Standard)</option>
-                            <option value="0">On START (of sequence)</option>
-                            <option value="1">1 Min before Class Flag</option>
-                            <option value="4">4 Min before Class Flag</option>
-                            <option value="5">5 Min before Class Flag</option>
-                        </select>
-                    </div>
-
-                    <div class="form-row">
-                        <label id="time-label-${id}">Scheduled Warning Signal (Class Flag)</label>
-                        <input type="time" id="time-${id}">
-                    </div>
+                    <div class="form-row"><label>Class</label><select id="class-${id}"><option value="None">None (General)</option><option>Optimist Gold</option><option>Optimist Silver</option><option>ILCA 4</option><option>ILCA 6</option><option>ILCA 7</option><option>29er</option><option>49er</option><option>Techno293</option><option>Techno293Plus</option><option>iQ Foil</option><option>WingFoil</option><option>KiteFoil</option></select></div>
+                    <div class="form-row"><label>Prep Flag</label><select id="prep-${id}"><option value="P">P (Blue)</option><option value="U">U (Red/White)</option><option value="Black">Black</option></select></div>
+                    <div class="form-row"><label style="color:#ff9800">Orange Flag Sound</label><select id="orange-${id}" onchange="updateTimeLabel(${id})"><option value="0">No Orange Flag Needed</option><option value="1">1 Min before Class Flag</option><option value="4">4 Min before Class Flag</option><option value="5">5 Min before Class Flag</option></select></div>
+                    <div class="form-row"><label id="time-label-${id}">Scheduled Warning Signal (Class Flag)</label><input type="time" id="time-${id}"></div>
                 </div>`);
         }
         
-        // Auto-add one card on load
+        function addGapCard() {
+            const id = cardIdCounter++;
+            stackEl.insertAdjacentHTML('beforeend', `
+                <div class="card" id="c-${id}" style="border-left-color: #ffc107">
+                    <div class="card-header">
+                        <div><span class="drag-handle">☰</span><span class="card-title">Gap / AP</span></div>
+                        <button onclick="this.closest('.card').remove()" style="background:none;border:none;color:#666">✕</button>
+                    </div>
+                    <div class="form-row"><label>Duration</label><select id="gap-${id}"><option value="0">Immediate (Rolling)</option><option value="60">1 Min</option><option value="120">2 Min</option><option value="180">3 Min</option><option value="240">4 Min</option><option value="300">5 Min</option><option value="600">10 Min</option></select></div>
+                </div>`);
+        }
+
         addStartCard();
     </script>
 </body>
