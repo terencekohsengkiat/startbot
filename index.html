@@ -1,256 +1,204 @@
-import sys
-import dbus
-import dbus.service
-import dbus.mainloop.glib
-from gi.repository import GLib
-from gpiozero import OutputDevice
-import json
-import time
-import os
-
-# --- CONSTANTS ---
-DBUS_OM_IFACE = 'org.freedesktop.DBus.ObjectManager'
-DBUS_PROP_IFACE = 'org.freedesktop.DBus.Properties'
-GATT_MANAGER_IFACE = 'org.bluez.GattManager1'
-GATT_CHRC_IFACE = 'org.bluez.GattCharacteristic1'
-GATT_SERVICE_IFACE = 'org.bluez.GattService1'
-LE_ADVERTISEMENT_IFACE = 'org.bluez.LEAdvertisement1'
-LE_ADVERTISING_MANAGER_IFACE = 'org.bluez.LEAdvertisingManager1'
-
-# --- CONFIGURATION ---
-REGATTA_SERVICE_UUID = '00000001-710e-4a5b-8d75-3e5b444bc3cf'
-RX_UUID              = '00000002-710e-4a5b-8d75-3e5b444bc3cf'
-TX_UUID              = '00000003-710e-4a5b-8d75-3e5b444bc3cf'
-
-# Hardware
-RELAY_PIN = 17
-try:
-    relay = OutputDevice(RELAY_PIN, active_high=False, initial_value=False)
-except:
-    relay = None
-
-# --- LOGIC ---
-class RegattaLogic:
-    def __init__(self):
-        self.countdown_active = False
-        self.time_left = 0
-        self.tx_callback = None 
-
-    def trigger_relay(self, duration=1.0):
-        print(f"!!! HORN BLAST ({duration}s) !!!")
-        if relay:
-            try:
-                relay.on()
-                time.sleep(duration)
-                relay.off()
-            except: pass
-
-    def log_event(self, event_type, details):
-        ts = time.strftime("%Y-%m-%d %H:%M:%S")
-        entry = f"{ts},{event_type},{details}\n"
-        print(f"LOG: {entry.strip()}")
-        try:
-            with open("race_log.csv", "a") as f: f.write(entry)
-        except: pass
-
-    def send_log_file(self):
-        """Reads the log file and sends it in chunks via notification"""
-        if not self.tx_callback: return
-        print("Sending Log File...")
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>StartBot Controller</title>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <style>
+        :root { --bg-color: #f0f2f5; --card-bg: #ffffff; --primary: #007bff; --danger: #dc3545; --success: #28a745; --text-main: #333; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg-color); margin: 0; padding-bottom: 120px; color: var(--text-main); }
+        .sticky-header { position: sticky; top: 0; z-index: 1000; background: var(--card-bg); padding: 10px 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .timer-display { font-size: 2.2rem; font-weight: bold; font-variant-numeric: tabular-nums; }
+        .header-controls { display: flex; gap: 10px; }
+        .btn-action { padding: 10px 20px; border-radius: 8px; border: none; font-weight: bold; font-size: 1rem; cursor: pointer; text-transform: uppercase; }
+        .btn-start { background: var(--success); color: white; }
+        .btn-ap { background: var(--danger); color: white; display: none; }
+        .btn-action:disabled { background: #ccc; cursor: not-allowed; }
+        .container { padding: 20px; }
+        #sequence-stack { display: flex; flex-direction: column; gap: 10px; min-height: 100px; }
+        .card { background: var(--card-bg); border-radius: 12px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }
+        .card-title { font-size: 1.1rem; font-weight: bold; color: var(--primary); }
+        .card-type-start { border-left: 5px solid var(--primary); }
+        .control-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card-bg); padding: 15px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; z-index: 100; }
+        .status-indicator { font-size: 0.9rem; font-weight: bold; color: #666; }
+        .status-indicator.connected { color: var(--success); }
+        .btn-connect { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 25px; font-weight: bold; }
         
-        try:
-            if not os.path.exists("race_log.csv"):
-                self.tx_callback(json.dumps({"log_error": "No log file found"}))
-                return
+        /* New Log Button Style */
+        .btn-log { display: block; width: 100%; margin-top: 20px; padding: 15px; background: transparent; border: 2px dashed #ccc; color: #666; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
 
-            with open("race_log.csv", "r") as f:
-                content = f.read()
-            
-            # Split into 100-character chunks (safe for BLE)
-            chunk_size = 100
-            for i in range(0, len(content), chunk_size):
-                chunk = content[i:i+chunk_size]
-                msg = json.dumps({"log_chunk": chunk})
-                self.tx_callback(msg)
-                time.sleep(0.05) # Small delay to prevent flooding
-            
-            # Send End Signal
-            self.tx_callback(json.dumps({"log_end": True}))
-            print("Log Sent Successfully")
-            
-        except Exception as e:
-            print(f"Log Transfer Error: {e}")
-            self.tx_callback(json.dumps({"log_error": str(e)}))
+    <div class="sticky-header">
+        <div class="timer-display" id="mainTimer">00:00</div>
+        <div class="header-controls">
+            <button id="btnStart" class="btn-action btn-start" onclick="sendCommand('START_SEQUENCE')" disabled>START</button>
+            <button id="btnAP" class="btn-action btn-ap" onclick="sendCommand('POSTPONE')">AP (STOP)</button>
+        </div>
+    </div>
 
-    def tick(self):
-        if self.countdown_active and self.time_left > 0:
-            self.time_left -= 1
-            
-            if self.tx_callback:
-                try:
-                    msg = json.dumps({"time": self.time_left, "status": "Running"})
-                    self.tx_callback(msg)
-                except: pass
+    <div class="container">
+        <div id="sequence-stack">
+            <div class="card card-type-start" id="card-0">
+                <div class="card-title">Start Sequence</div>
+                <p>Standard 5-4-1-Go</p>
+            </div>
+        </div>
+        
+        <button class="btn-log" onclick="downloadLog()">Download Race Log (CSV)</button>
+    </div>
 
-            # Physical Signals
-            if self.time_left == 300: # 5m
-                self.trigger_relay(1)
-                self.log_event("Signal", "Warning (5m)")
-            elif self.time_left == 240: # 4m
-                self.trigger_relay(1)
-                self.log_event("Signal", "Prep (4m)")
-            elif self.time_left == 60: # 1m
-                self.trigger_relay(1.5)
-                self.log_event("Signal", "One Min (1m)")
-            elif self.time_left == 0: # GO
-                self.trigger_relay(1)
-                self.log_event("Signal", "START")
-                self.countdown_active = False
+    <div class="control-bar">
+        <div class="status-indicator" id="statusText">Disconnected</div>
+        <button class="btn-connect" id="btnConnect" onclick="connectBluetooth()">Connect to Pi</button>
+    </div>
 
-        return True
+    <script>
+        const SERVICE_UUID = '00000001-710e-4a5b-8d75-3e5b444bc3cf';
+        const RX_UUID      = '00000002-710e-4a5b-8d75-3e5b444bc3cf';
+        const TX_UUID      = '00000003-710e-4a5b-8d75-3e5b444bc3cf';
 
-    def handle_command(self, cmd_str):
-        try:
-            data = json.loads(cmd_str)
-            print(f"CMD: {data}")
-            cmd = data.get('command')
-            
-            if cmd == "START_SEQUENCE":
-                self.time_left = 305
-                self.countdown_active = True
-                self.trigger_relay(0.2)
-            elif cmd == "POSTPONE":
-                self.countdown_active = False
-                self.trigger_relay(0.3)
-                time.sleep(0.2)
-                self.trigger_relay(0.3)
-                self.log_event("Command", "AP")
-            elif cmd == "GET_LOG":
-                self.send_log_file()
+        let bluetoothDevice;
+        let rxCharacteristic;
+        let speechEnabled = false;
+        let logBuffer = ""; // Holds the incoming file parts
+
+        // --- AUDIO ENGINE ---
+        function speak(text) {
+            if (!speechEnabled) return;
+            window.speechSynthesis.cancel(); 
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.1; 
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // --- BLUETOOTH LOGIC ---
+        async function connectBluetooth() {
+            const statusText = document.getElementById('statusText');
+            try {
+                statusText.innerText = "Requesting...";
+                speechEnabled = true;
+                speak("Connected. Ready.");
+
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'StartBot' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+                const server = await bluetoothDevice.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                rxCharacteristic = await service.getCharacteristic(RX_UUID);
+                const txCharacteristic = await service.getCharacteristic(TX_UUID);
+                await txCharacteristic.startNotifications();
+                txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+
+                statusText.innerText = "Connected to Pi";
+                statusText.classList.add("connected");
+                document.getElementById('btnConnect').style.display = 'none';
+                document.getElementById('btnStart').disabled = false;
+
+            } catch (error) {
+                statusText.innerText = "Failed: " + error;
+            }
+        }
+
+        function onDisconnected() {
+            document.getElementById('statusText').innerText = "Disconnected";
+            document.getElementById('statusText').classList.remove("connected");
+            document.getElementById('btnConnect').style.display = 'block';
+            document.getElementById('btnStart').disabled = true;
+        }
+
+        function handleNotifications(event) {
+            const value = event.target.value;
+            const decoder = new TextDecoder('utf-8');
+            try {
+                const data = JSON.parse(decoder.decode(value));
                 
-        except: pass
+                // 1. Log File Handling
+                if (data.log_chunk) {
+                    logBuffer += data.log_chunk;
+                }
+                if (data.log_end) {
+                    saveLogFile();
+                }
+                if (data.log_error) {
+                    alert("Log Error: " + data.log_error);
+                }
 
-logic = RegattaLogic()
+                // 2. Timer UI
+                if (data.time !== undefined) {
+                    const mins = Math.floor(data.time / 60);
+                    const secs = data.time % 60;
+                    document.getElementById('mainTimer').innerText = 
+                        `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                    checkAudioTriggers(data.time);
+                }
+                
+                // 3. Status Buttons
+                if (data.status === "Running") {
+                    document.getElementById('btnStart').style.display = 'none';
+                    document.getElementById('btnAP').style.display = 'block';
+                } else {
+                    document.getElementById('btnStart').style.display = 'block';
+                    document.getElementById('btnAP').style.display = 'none';
+                }
 
-# --- BLUETOOTH ENGINE (Unchanged Standard Boilerplate) ---
-class Application(dbus.service.Object):
-    def __init__(self, bus):
-        self.path = '/'
-        self.services = []
-        dbus.service.Object.__init__(self, bus, self.path)
-    def get_path(self): return dbus.ObjectPath(self.path)
-    def add_service(self, service): self.services.append(service)
-    @dbus.service.method(DBUS_OM_IFACE, out_signature='a{oa{sa{sv}}}')
-    def GetManagedObjects(self):
-        response = {}
-        for service in self.services:
-            response[service.get_path()] = service.get_properties()
-            for chrc in service.get_characteristics():
-                response[chrc.get_path()] = chrc.get_properties()
-        return response
+            } catch (e) { console.error(e); }
+        }
 
-class Service(dbus.service.Object):
-    def __init__(self, bus, index, uuid, primary):
-        self.path = '/org/bluez/example/service' + str(index)
-        self.bus = bus
-        self.uuid = uuid
-        self.primary = primary
-        self.characteristics = []
-        dbus.service.Object.__init__(self, bus, self.path)
-    def get_properties(self):
-        return {
-            GATT_SERVICE_IFACE: {
-                'UUID': self.uuid, 'Primary': self.primary,
-                'Characteristics': dbus.Array([c.get_path() for c in self.characteristics], signature='o')
+        function checkAudioTriggers(secondsLeft) {
+            switch(secondsLeft) {
+                case 305: speak("Sequence started. Five minutes to warning."); break;
+                case 300: speak("Five minutes. Warning signal."); break;
+                case 240: speak("Four minutes. Prep signal."); break;
+                case 60:  speak("One minute. Long sound."); break;
+                case 10:  speak("Ten seconds."); break;
+                case 5:   speak("Five"); break;
+                case 4:   speak("Four"); break;
+                case 3:   speak("Three"); break;
+                case 2:   speak("Two"); break;
+                case 1:   speak("One"); break;
+                case 0:   speak("Start! Go go go!"); break;
             }
         }
-    def get_path(self): return dbus.ObjectPath(self.path)
-    def add_characteristic(self, chrc): self.characteristics.append(chrc)
-    def get_characteristics(self): return self.characteristics
 
-class Characteristic(dbus.service.Object):
-    def __init__(self, bus, index, uuid, flags, service):
-        self.path = service.path + '/char' + str(index)
-        self.bus = bus
-        self.uuid = uuid
-        self.service = service
-        self.flags = flags
-        self.value = []
-        self.notifying = False
-        dbus.service.Object.__init__(self, bus, self.path)
-    def get_path(self): return dbus.ObjectPath(self.path)
-    def get_properties(self):
-        return {
-            GATT_CHRC_IFACE: {
-                'Service': self.service.get_path(), 'UUID': self.uuid, 'Flags': self.flags,
+        async function sendCommand(cmdType) {
+            if (!rxCharacteristic) return;
+            const payload = JSON.stringify({ command: cmdType });
+            const encoder = new TextEncoder('utf-8');
+            await rxCharacteristic.writeValue(encoder.encode(payload));
+            
+            if (cmdType === 'START_SEQUENCE') speak("Starting sequence.");
+            if (cmdType === 'POSTPONE') speak("Race Postponed.");
+        }
+
+        function downloadLog() {
+            if (!rxCharacteristic) {
+                alert("Connect to Pi first!");
+                return;
             }
+            // Clear buffer and ask Pi for data
+            logBuffer = "";
+            sendCommand("GET_LOG");
+            alert("Requesting Log... Wait for download.");
         }
-    @dbus.service.method(GATT_CHRC_IFACE, in_signature='a{sv}', out_signature='ay')
-    def ReadValue(self, options): return self.value
-    @dbus.service.method(GATT_CHRC_IFACE, in_signature='aya{sv}')
-    def WriteValue(self, value, options):
-        try:
-            cmd = bytes(value).decode('utf-8')
-            logic.handle_command(cmd)
-        except: pass
-    @dbus.service.method(GATT_CHRC_IFACE)
-    def StartNotify(self):
-        self.notifying = True
-        logic.tx_callback = self.send_tx
-    @dbus.service.method(GATT_CHRC_IFACE)
-    def StopNotify(self): self.notifying = False
-    def send_tx(self, msg):
-        if not self.notifying: return
-        value = dbus.Array(msg.encode('utf-8'), signature=dbus.Signature('y'))
-        self.PropertiesChanged(GATT_CHRC_IFACE, {'Value': value}, [])
-    @dbus.service.signal(DBUS_PROP_IFACE, signature='sa{sv}as')
-    def PropertiesChanged(self, interface, changed, invalidated): pass
 
-class Advertisement(dbus.service.Object):
-    def __init__(self, bus, index, type):
-        self.path = '/org/bluez/example/advertisement' + str(index)
-        self.bus = bus
-        self.ad_type = type
-        self.local_name = 'StartBot'
-        self.service_uuids = [REGATTA_SERVICE_UUID]
-        dbus.service.Object.__init__(self, bus, self.path)
-    def get_path(self): return dbus.ObjectPath(self.path)
-    @dbus.service.method(DBUS_PROP_IFACE, in_signature='s', out_signature='a{sv}')
-    def GetAll(self, interface):
-        if interface != LE_ADVERTISEMENT_IFACE: return {}
-        return {
-            'Type': self.ad_type,
-            'ServiceUUIDs': dbus.Array(self.service_uuids, signature='s'),
-            'LocalName': dbus.String(self.local_name),
-            'IncludeTxPower': dbus.Boolean(True)
+        function saveLogFile() {
+            const blob = new Blob([logBuffer], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'race_log.csv';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            alert("Log Downloaded!");
         }
-    @dbus.service.method(LE_ADVERTISEMENT_IFACE, signature='', out_signature='')
-    def Release(self): print('Advertisement released')
-
-def main():
-    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
-    bus = dbus.SystemBus()
-    app = Application(bus)
-    srv = Service(bus, 0, REGATTA_SERVICE_UUID, True)
-    rx = Characteristic(bus, 0, RX_UUID, ['write'], srv)
-    tx = Characteristic(bus, 1, TX_UUID, ['read', 'notify'], srv)
-    srv.add_characteristic(rx)
-    srv.add_characteristic(tx)
-    app.add_service(srv)
-    
-    adapter = bus.get_object('org.bluez', '/org/bluez/hci0')
-    manager = dbus.Interface(adapter, GATT_MANAGER_IFACE)
-    manager.RegisterApplication(app.get_path(), {}, reply_handler=lambda:print("GATT OK"), error_handler=lambda e:print(f"GATT Error: {e}"))
-    
-    ad_manager = dbus.Interface(adapter, LE_ADVERTISING_MANAGER_IFACE)
-    ad = Advertisement(bus, 0, 'peripheral')
-    ad_manager.RegisterAdvertisement(ad.get_path(), {}, reply_handler=lambda:print("Advertising..."), error_handler=lambda e:print(f"Adv Error: {e}"))
-
-    GLib.timeout_add_seconds(1, logic.tick)
-    print("StartBot Running (Log Supported)...")
-    mainloop = GLib.MainLoop()
-    try: mainloop.run()
-    except KeyboardInterrupt: print("\nStopping...")
-
-if __name__ == '__main__':
-    main()
+    </script>
+</body>
+</html>
