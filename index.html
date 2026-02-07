@@ -9,7 +9,6 @@
         :root { --bg-color: #1a1a1a; --card-bg: #2d2d2d; --primary: #007bff; --danger: #dc3545; --success: #28a745; --text-main: #ffffff; --text-dim: #b0b0b0; }
         body { font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background: var(--bg-color); margin: 0; padding-bottom: 160px; color: var(--text-main); }
         
-        /* HEADER */
         .sticky-header { position: sticky; top: 0; z-index: 1000; background: #000000; padding: 15px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
         .timers { text-align: left; }
         .main-timer { font-size: 2.5rem; font-weight: bold; font-family: monospace; color: var(--success); line-height: 1; }
@@ -22,7 +21,6 @@
         .btn-ap { background: var(--danger); width: 50px; display: none; }
         .btn-horn { background: #ffc107; color: black; width: 60px; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
 
-        /* CARD STACK */
         .container { padding: 15px; }
         #sequence-stack { display: flex; flex-direction: column; gap: 12px; }
         .card { background: var(--card-bg); border-radius: 8px; padding: 15px; border-left: 5px solid #555; position: relative; transition: opacity 0.3s; }
@@ -35,18 +33,15 @@
         label { display: block; color: var(--text-dim); font-size: 0.8rem; margin-bottom: 4px; }
         select, input[type="time"] { width: 100%; background: #444; color: white; border: 1px solid #555; padding: 10px; border-radius: 6px; font-size: 1rem; box-sizing: border-box; }
         
-        /* COMMIT BUTTON */
         .commit-zone { margin-top: 30px; margin-bottom: 20px; }
         .btn-commit { width: 100%; padding: 15px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; transition: all 0.3s; text-transform: uppercase; }
         .btn-commit.unlocked { background: var(--primary); color: white; }
         .btn-commit.locked { background: var(--danger); color: white; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
 
-        /* ADD BUTTONS */
         .add-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
         .btn-add { width: 50px; height: 50px; border-radius: 50%; border: none; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; background: #444; color: white; }
 
-        /* FOOTER */
         .control-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #000; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #333; z-index: 2000; }
         .status-text { font-size: 0.8rem; color: #666; }
         .status-text.connected { color: var(--success); }
@@ -75,12 +70,10 @@
 
     <div class="container">
         <div id="sequence-stack"></div>
-        
         <div class="add-buttons">
             <button class="btn-add" onclick="addStartCard()" style="background: var(--primary)">+</button>
             <button class="btn-add" onclick="addGapCard()" style="background: #ffc107; color: black">⏳</button>
         </div>
-
         <div class="commit-zone">
             <button id="btnCommit" class="btn-commit unlocked" onclick="toggleCommit()">COMMIT TO SEQUENCE</button>
         </div>
@@ -105,26 +98,20 @@
         let speechEnabled = false;
         let wakeLock = null;
         
-        // State
         let isCommitted = false;
         let activeCardIndex = -1;
         let gapInterval = null;
         let scheduleInterval = null;
         
-        // Active Card Config
         let currentClass = "";
         let currentPrep = "";
         let orangeOffset = 0; 
-        
-        // --- WAKE LOCK ---
+
         async function requestWakeLock() {
-            try {
-                wakeLock = await navigator.wakeLock.request('screen');
-                wakeLock.addEventListener('release', () => { console.log('Wake Lock released'); });
-            } catch (err) { console.log(`${err.name}, ${err.message}`); }
+            try { wakeLock = await navigator.wakeLock.request('screen'); } 
+            catch (err) { console.log(err); }
         }
 
-        // --- AUDIO ENGINE ---
         function speak(text) {
             if (!speechEnabled) return;
             window.speechSynthesis.cancel();
@@ -133,7 +120,6 @@
             window.speechSynthesis.speak(u);
         }
 
-        // --- BLUETOOTH ---
         async function connectBluetooth() {
             try {
                 speechEnabled = true;
@@ -169,59 +155,38 @@
                 if (data.log_end) saveLogFile();
                 
                 if (data.time !== undefined) {
-                    // Update UI and check voice for Active Sequence
                     updateTimers(data.time);
                     checkVoiceTriggers(data.time);
                 }
                 
-                // State Management
                 if (data.status === "Running") {
                     document.getElementById('btnStart').style.display = 'none';
                     document.getElementById('btnAP').style.display = 'block';
                 } else if (data.status === "Finished" || data.status === "Stopped") {
                     document.getElementById('btnStart').style.display = 'block';
                     document.getElementById('btnAP').style.display = 'none';
-                    
-                    // IF we are in a sequence and it finished naturally, trigger NEXT
-                    if (isCommitted && data.status === "Finished") {
-                        nextCard();
-                    } else if (data.status === "Stopped") {
-                        // Manual Stop / AP
-                        resetUI();
-                    }
+                    if (isCommitted && data.status === "Finished") nextCard();
+                    else if (data.status === "Stopped") resetUI();
                 }
             } catch (e) {}
         }
 
-        // --- PLAYLIST LOGIC ---
-        
         function nextCard() {
             const cards = Array.from(document.querySelectorAll('.card'));
             activeCardIndex++;
-            
             if (activeCardIndex >= cards.length) {
-                // End of Playlist
                 speak("Regatta Sequence Complete.");
                 resetUI();
                 return;
             }
-            
             const card = cards[activeCardIndex];
-            
-            // Highlight active card
             cards.forEach(c => c.style.borderLeftWidth = "5px");
             card.style.borderLeftWidth = "15px"; 
-            
-            // Check Type
-            if (card.classList.contains('card-type-start')) {
-                executeStartCard(card);
-            } else {
-                executeGapCard(card);
-            }
+            if (card.classList.contains('card-type-start')) executeStartCard(card);
+            else executeGapCard(card);
         }
         
         function executeStartCard(card) {
-            // Read Values
             const id = card.id.split('-')[1];
             currentClass = document.getElementById(`class-${id}`).value;
             if(currentClass === "None") currentClass = ""; 
@@ -229,17 +194,11 @@
             const orangeVal = document.getElementById(`orange-${id}`).value;
             orangeOffset = parseInt(orangeVal) * 60; 
             
-            // Check Schedule (Only applies to the FIRST card if it has a time)
             const timeInput = document.getElementById(`time-${id}`).value;
-            
-            // If this is the FIRST card and has a time, we wait.
-            // But if we are in the middle of a playlist (index > 0), we just go (unless time is set? No, playlist implies flow).
-            // Simplified: If Time Input exists AND we are at index 0, we count down to it.
             if (activeCardIndex === 0 && timeInput) {
                 startScheduleWatcher(timeInput);
                 speak(`Sequence Armed for ${timeInput}`);
             } else {
-                // Immediate Fire
                 firePiSequence();
             }
         }
@@ -248,46 +207,26 @@
             const id = card.id.split('-')[1];
             const durationVal = document.getElementById(`gap-${id}`).value;
             let seconds = parseInt(durationVal);
-            
-            if (seconds === 0) {
-                // Rolling
-                nextCard();
-                return;
-            }
+            if (seconds === 0) { nextCard(); return; }
             
             speak(`Gap. ${seconds/60} minutes.`);
-            
-            // Run Gap Timer on Phone
             let gapTime = seconds;
-            updateTimers(gapTime); // Initial Show
-            
+            updateTimers(gapTime); 
             gapInterval = setInterval(() => {
                 gapTime--;
                 updateTimers(gapTime);
-                
-                // Voice for Gap (Simple)
                 if(gapTime === 60) speak("One minute to next sequence.");
                 if(gapTime === 10) speak("Ten seconds.");
                 if(gapTime <= 5 && gapTime > 0) speak(gapTime.toString());
-                
-                if (gapTime <= 0) {
-                    clearInterval(gapInterval);
-                    nextCard(); // Move on
-                }
+                if (gapTime <= 0) { clearInterval(gapInterval); nextCard(); }
             }, 1000);
         }
 
-        // --- TIMING LOGIC ---
-
         function startScheduleWatcher(targetTimeStr) {
             if(scheduleInterval) clearInterval(scheduleInterval);
-            
-            // We need to countdown nicely
             scheduleInterval = setInterval(() => {
                 const now = new Date();
-                const nowStr = now.toTimeString().slice(0, 5); // "14:00"
-                
-                // Calculate seconds until target (for UI)
+                const nowStr = now.toTimeString().slice(0, 5); 
                 const target = new Date();
                 const [h, m] = targetTimeStr.split(':');
                 target.setHours(h, m, 0, 0);
@@ -295,35 +234,13 @@
                 let diff = Math.floor((target - now) / 1000);
                 
                 if (diff < 0) {
-                    // Time passed? Fire immediately or handled?
                     clearInterval(scheduleInterval);
                     firePiSequence();
                 } else {
-                    // Update UI and Voice
                     updateTimers(diff);
-                    
-                    // Voice Triggers for Pre-Roll
-                    // Note: 'diff' is time TO the start command.
-                    // If orangeOffset is 0, Start Command = Warning Signal (300).
-                    // So if diff = 60, we are 60s from Warning.
-                    // We need to map 'diff' to the Regatta Time Scale.
-                    
-                    // The Regatta Scale: 
-                    // Orange Start = 300 + orangeOffset.
-                    // Warning = 300.
-                    
-                    // Actually, simpler:
-                    // If we are waiting for a start time, that start time IS the trigger for the Pi.
-                    // The Pi starts at (305 + orangeOffset).
-                    // So 'diff' seconds before the Pi starts means we are 'diff' seconds before the First Horn.
-                    
-                    // Just count down 45, 30, 10 to the "Start of Sequence"
+                    // Pre-roll Audio (Orange offset is effectively 0 for pre-roll visual)
                      if ([45, 30, 20, 15, 10, 5, 4, 3, 2, 1].includes(diff)) {
-                         let msg = "";
-                         // What is the first event?
-                         if (orangeOffset > 0) msg = "Orange Flag Display";
-                         else msg = `${currentClass} Class Flag Display`;
-                         
+                         let msg = (orangeOffset > 0) ? "Orange Flag Display" : `${currentClass} Class Flag Display`;
                          if(diff <= 5) speak(diff.toString());
                          else speak(`${diff} seconds to ${msg}`);
                      }
@@ -333,12 +250,11 @@
 
         function firePiSequence() {
             if(scheduleInterval) clearInterval(scheduleInterval);
-            const duration = 305 + orangeOffset;
+            // EXACT TIME. NO BUFFER.
+            const duration = 300 + orangeOffset;
             sendCommand({ command: 'START_SEQUENCE', seconds: duration });
             speak("Sequence Initiated.");
         }
-
-        // --- UI UPDATES ---
 
         function updateTimers(t) {
             if(t < 0) t = 0;
@@ -346,20 +262,19 @@
             const secs = t % 60;
             document.getElementById('mainTimer').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
             
-            // Next Signal Logic
-            // If we are in Gap or Schedule mode, Next Signal is 0 (The start)
             if (gapInterval || scheduleInterval) {
                  document.getElementById('nextSignalTimer').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
                  return;
             }
 
-            // If running Pi logic
+            // YELLOW TIMER LOGIC
             let marks = [];
             if(orangeOffset > 0) marks.push(300 + orangeOffset);
             marks.push(300); marks.push(240); marks.push(60); marks.push(0);
             
             let nextMark = 0;
             for(let m of marks) {
+                // Find largest mark smaller than current t (next event down)
                 if (t > m) { nextMark = m; break; }
             }
             const diff = t - nextMark;
@@ -369,7 +284,6 @@
         }
 
         function checkVoiceTriggers(t) {
-            // Define Marks
             let marks = [];
             if (orangeOffset > 0) marks.push(300 + orangeOffset); 
             marks.push(300); marks.push(240); marks.push(60); marks.push(0);
@@ -402,35 +316,30 @@
             });
         }
 
-        // --- BUTTONS & COMMANDS ---
-        
         function toggleCommit() {
             if (!isCommitted) {
-                // START / ARM
                 const cards = document.querySelectorAll('.card');
                 if(cards.length === 0) return;
-                
                 isCommitted = true;
-                activeCardIndex = -1; // Reset
-                
+                activeCardIndex = -1; 
                 document.getElementById('btnCommit').innerText = "SEQUENCE LOCKED IN. PRESS TO UNLOCK";
                 document.getElementById('btnCommit').className = "btn-commit locked";
                 cards.forEach(c => c.classList.add("locked"));
-                
-                nextCard(); // Start the first card logic
-                
+                nextCard();
             } else {
                 resetUI();
             }
         }
         
         function resetUI() {
+             // ECHO FIX: Only speak reset if we were actually active
+             if(!isCommitted && activeCardIndex === -1 && !gapInterval && !scheduleInterval) return;
+
              isCommitted = false;
              activeCardIndex = -1;
              if(gapInterval) clearInterval(gapInterval);
              if(scheduleInterval) clearInterval(scheduleInterval);
-             gapInterval = null;
-             scheduleInterval = null;
+             gapInterval = null; scheduleInterval = null;
              
              document.getElementById('btnCommit').innerText = "COMMIT TO SEQUENCE";
              document.getElementById('btnCommit').className = "btn-commit unlocked";
@@ -439,9 +348,10 @@
                  c.style.borderLeftWidth = "5px";
              });
              
-             sendCommand({ command: 'POSTPONE' }); // Ensure Pi stops
+             sendCommand({ command: 'POSTPONE' });
              speak("Sequence Reset.");
              document.getElementById('mainTimer').innerText = "00:00";
+             document.getElementById('nextSignalTimer').innerText = "--:--";
         }
 
         async function sendCommand(jsonObj) {
@@ -450,33 +360,16 @@
         }
 
         function startNow() {
-            // Immediate Start override
-            // Ideally this injects an immediate start card or forces current card
             if(isCommitted && activeCardIndex >= 0) {
-                // We are waiting for schedule?
-                if(scheduleInterval) {
-                    firePiSequence();
-                }
+                if(scheduleInterval) firePiSequence();
             } else {
-                 // Not committed? Just grab top card defaults and fire
-                 // Simplified for safety: Start Now only valid if cards exist
-                 alert("Please Commit a Sequence first, then wait for schedule or press Start Now to override timer.");
+                 alert("Please Commit a Sequence first.");
             }
         }
         
-        function sendAP() { 
-            resetUI();
-        }
-        
-        function manualHorn(state) {
-            state ? sendCommand({ command: 'HORN_ON' }) : sendCommand({ command: 'HORN_OFF' });
-        }
-        
-        function downloadLog() { 
-            logBuffer = ""; 
-            sendCommand({ command: 'GET_LOG' }); 
-        }
-
+        function sendAP() { resetUI(); }
+        function manualHorn(state) { state ? sendCommand({ command: 'HORN_ON' }) : sendCommand({ command: 'HORN_OFF' }); }
+        function downloadLog() { logBuffer = ""; sendCommand({ command: 'GET_LOG' }); }
         function saveLogFile() {
             const blob = new Blob([logBuffer], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
@@ -497,7 +390,6 @@
             }
         }
 
-        // --- CARD MANAGEMENT ---
         const stackEl = document.getElementById('sequence-stack');
         new Sortable(stackEl, { handle: '.drag-handle', animation: 150 });
 
@@ -527,7 +419,6 @@
                     <div class="form-row"><label>Duration</label><select id="gap-${id}"><option value="0">Immediate (Rolling)</option><option value="60">1 Min</option><option value="120">2 Min</option><option value="180">3 Min</option><option value="240">4 Min</option><option value="300">5 Min</option><option value="600">10 Min</option></select></div>
                 </div>`);
         }
-
         addStartCard();
     </script>
 </body>
