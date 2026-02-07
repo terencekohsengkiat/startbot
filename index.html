@@ -231,14 +231,18 @@
                 const [h, m] = targetTimeStr.split(':');
                 target.setHours(h, m, 0, 0);
                 
+                // diff = seconds until the First Horn (Command Trigger)
                 let diff = Math.floor((target - now) / 1000);
                 
                 if (diff < 0) {
                     clearInterval(scheduleInterval);
                     firePiSequence();
                 } else {
-                    updateTimers(diff);
-                    // Pre-roll Audio (Orange offset is effectively 0 for pre-roll visual)
+                    // FIX: Visual Timer should show Total Time To Start
+                    // Total = Time To Trigger (diff) + Sequence Duration (300 + orange)
+                    updateTimers(diff + 300 + orangeOffset);
+                    
+                    // Audio: Count down to First Horn (Orange or Class)
                      if ([45, 30, 20, 15, 10, 5, 4, 3, 2, 1].includes(diff)) {
                          let msg = (orangeOffset > 0) ? "Orange Flag Display" : `${currentClass} Class Flag Display`;
                          if(diff <= 5) speak(diff.toString());
@@ -250,7 +254,6 @@
 
         function firePiSequence() {
             if(scheduleInterval) clearInterval(scheduleInterval);
-            // EXACT TIME. NO BUFFER.
             const duration = 300 + orangeOffset;
             sendCommand({ command: 'START_SEQUENCE', seconds: duration });
             speak("Sequence Initiated.");
@@ -262,7 +265,8 @@
             const secs = t % 60;
             document.getElementById('mainTimer').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
             
-            if (gapInterval || scheduleInterval) {
+            // If in Gap or Schedule, 't' is artificially constructed, so we just return
+            if (gapInterval) {
                  document.getElementById('nextSignalTimer').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
                  return;
             }
@@ -274,7 +278,6 @@
             
             let nextMark = 0;
             for(let m of marks) {
-                // Find largest mark smaller than current t (next event down)
                 if (t > m) { nextMark = m; break; }
             }
             const diff = t - nextMark;
@@ -332,7 +335,6 @@
         }
         
         function resetUI() {
-             // ECHO FIX: Only speak reset if we were actually active
              if(!isCommitted && activeCardIndex === -1 && !gapInterval && !scheduleInterval) return;
 
              isCommitted = false;
