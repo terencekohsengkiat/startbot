@@ -1,1 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>StartBot Controller</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --primary: #007bff;
+            --danger: #dc3545;
+            --success: #28a745;
+            --warning: #ffc107;
+            --text-main: #333;
+            --text-light: #666;
+        }
 
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: var(--text-main);
+            padding-bottom: 100px; /* Space for bottom connection bar */
+        }
+
+        h1 { text-align: center; font-size: 1.5rem; margin-bottom: 20px; }
+
+        /* --- CONTROL BAR --- */
+        .control-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            padding: 15px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .status-indicator {
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: var(--text-light);
+        }
+        .status-indicator.connected { color: var(--success); }
+
+        .btn-connect {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        /* --- CARD STACK --- */
+        #sequence-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            position: relative;
+            transition: transform 0.2s;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .card-type-gap .card-title { color: var(--text-light); font-size: 1rem; }
+        
+        .btn-remove {
+            background: none;
+            border: none;
+            color: var(--danger);
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 0 5px;
+        }
+
+        /* --- FORM ELEMENTS --- */
+        .form-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        label { font-size: 0.9rem; color: var(--text-light); }
+
+        select, input[type="number"] {
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            font-size: 1rem;
+            background: #fff;
+            width: 60%;
+        }
+
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* --- ADD BUTTONS --- */
+        .add-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .btn-add {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .btn-add-start { background-color: var(--primary); color: white; }
+        .btn-add-gap { background-color: #e2e6ea; color: var(--text-light); }
+
+        /* --- DRAG HANDLES --- */
+        .drag-handle {
+            color: #ccc;
+            margin-right: 10px;
+            cursor: grab;
+            font-size: 1.2rem;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>StartBot Regatta Manager</h1>
+
+    <div id="sequence-stack">
+        </div>
+
+    <div class="add-buttons">
+        <button class="btn-add btn-add-start" onclick="addStartCard()" title="Add Start Sequence">+</button>
+        <button class="btn-add btn-add-gap" onclick="addGapCard()" title="Add Time Gap">⏳</button>
+    </div>
+
+    <div class="control-bar">
+        <div class="status-indicator" id="statusText">Disconnected</div>
+        <button class="btn-connect" onclick="connectBluetooth()">Connect to Pi</button>
+    </div>
+
+    <script>
+        // Store the sequence data
+        let sequenceData = [];
+        let cardIdCounter = 0;
+
+        // --- UI FUNCTIONS ---
+
+        function addStartCard() {
+            const id = cardIdCounter++;
+            const cardHTML = `
+                <div class="card card-type-start" id="card-${id}">
+                    <div class="card-header">
+                        <div style="display:flex; align-items:center;">
+                            <span class="drag-handle">☰</span>
+                            <span class="card-title">Start Sequence</span>
+                        </div>
+                        <button class="btn-remove" onclick="removeCard(${id})">&times;</button>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Class Flag</label>
+                        <select id="class-${id}">
+                            <option value="ILCA">ILCA (Laser)</option>
+                            <option value="Optimist">Optimist</option>
+                            <option value="29er">29er</option>
+                            <option value="420">420</option>
+                            <option value="Generic">Generic Class</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <label>Prep Flag</label>
+                        <select id="prep-${id}">
+                            <option value="P">P (Blue Peter)</option>
+                            <option value="U">U Flag</option>
+                            <option value="Black">Black Flag</option>
+                            <option value="I">I Flag</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <label>Orange Flag</label>
+                        <select id="orange-${id}">
+                            <option value="0">None (Manual)</option>
+                            <option value="5">5 mins before</option>
+                            <option value="10">10 mins before</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+            document.getElementById('sequence-stack').insertAdjacentHTML('beforeend', cardHTML);
+        }
+
+        function addGapCard() {
+            const id = cardIdCounter++;
+            const cardHTML = `
+                <div class="card card-type-gap" id="card-${id}" style="background-color: #f8f9fa;">
+                    <div class="card-header">
+                        <div style="display:flex; align-items:center;">
+                            <span class="drag-handle">☰</span>
+                            <span class="card-title">Rolling Gap</span>
+                        </div>
+                        <button class="btn-remove" onclick="removeCard(${id})">&times;</button>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Duration</label>
+                        <select id="gap-${id}">
+                            <option value="0">Immediate (Rolling)</option>
+                            <option value="1">1 Minute</option>
+                            <option value="2">2 Minutes</option>
+                            <option value="5">5 Minutes</option>
+                            <option value="manual">Wait for Manual Trigger</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+            document.getElementById('sequence-stack').insertAdjacentHTML('beforeend', cardHTML);
+        }
+
+        function removeCard(id) {
+            const card = document.getElementById(`card-${id}`);
+            if (card) {
+                card.remove();
+            }
+        }
+
+        // --- BLUETOOTH PLACEHOLDERS ---
+
+        async function connectBluetooth() {
+            const statusText = document.getElementById('statusText');
+            statusText.innerText = "Scanning...";
+            
+            // This is where the actual Web Bluetooth API code will go in the next step
+            // For now, we simulate a connection
+            setTimeout(() => {
+                statusText.innerText = "Connected to Pi";
+                statusText.classList.add("connected");
+                alert("Simulated Connection Successful!\n\n(Real Bluetooth logic will be added in Step 4)");
+            }, 1000);
+        }
+
+        // Initialize with one start card
+        addStartCard();
+
+    </script>
+</body>
+</html>
