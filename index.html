@@ -3,30 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>StartBot Controller</title>
+    <title>StartBot Pro</title>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
-        :root { --bg-color: #f0f2f5; --card-bg: #ffffff; --primary: #007bff; --danger: #dc3545; --success: #28a745; --text-main: #333; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg-color); margin: 0; padding-bottom: 120px; color: var(--text-main); }
-        .sticky-header { position: sticky; top: 0; z-index: 1000; background: var(--card-bg); padding: 10px 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
-        .timer-display { font-size: 2.2rem; font-weight: bold; font-variant-numeric: tabular-nums; }
-        .header-controls { display: flex; gap: 10px; }
-        .btn-action { padding: 10px 20px; border-radius: 8px; border: none; font-weight: bold; font-size: 1rem; cursor: pointer; text-transform: uppercase; }
-        .btn-start { background: var(--success); color: white; }
-        .btn-ap { background: var(--danger); color: white; display: none; }
-        .btn-action:disabled { background: #ccc; cursor: not-allowed; }
-        .container { padding: 20px; }
-        #sequence-stack { display: flex; flex-direction: column; gap: 10px; min-height: 100px; }
-        .card { background: var(--card-bg); border-radius: 12px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }
-        .card-title { font-size: 1.1rem; font-weight: bold; color: var(--primary); }
-        .card-type-start { border-left: 5px solid var(--primary); }
-        .control-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card-bg); padding: 15px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; z-index: 100; }
-        .status-indicator { font-size: 0.9rem; font-weight: bold; color: #666; }
-        .status-indicator.connected { color: var(--success); }
-        .btn-connect { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 25px; font-weight: bold; }
+        :root { --bg-color: #1a1a1a; --card-bg: #2d2d2d; --primary: #007bff; --danger: #dc3545; --success: #28a745; --text-main: #ffffff; --text-dim: #b0b0b0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background: var(--bg-color); margin: 0; padding-bottom: 140px; color: var(--text-main); }
         
-        /* New Log Button Style */
-        .btn-log { display: block; width: 100%; margin-top: 20px; padding: 15px; background: transparent; border: 2px dashed #ccc; color: #666; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        /* HEADER */
+        .sticky-header { position: sticky; top: 0; z-index: 1000; background: #000000; padding: 15px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        .timer-display { font-size: 3rem; font-weight: bold; font-family: monospace; color: var(--success); }
+        .header-controls { display: flex; gap: 8px; }
+        .btn-action { padding: 12px 15px; border-radius: 6px; border: none; font-weight: bold; font-size: 0.9rem; cursor: pointer; text-transform: uppercase; color: white; }
+        .btn-start { background: var(--success); width: 100px; }
+        .btn-ap { background: var(--danger); width: 80px; display: none; }
+        .btn-horn { background: #ffc107; color: black; width: 80px; }
+        
+        /* CARD STACK */
+        .container { padding: 15px; }
+        #sequence-stack { display: flex; flex-direction: column; gap: 12px; }
+        .card { background: var(--card-bg); border-radius: 8px; padding: 15px; border-left: 5px solid #555; position: relative; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .card-title { font-weight: bold; font-size: 1.1rem; }
+        .drag-handle { cursor: grab; color: #666; font-size: 1.5rem; padding-right: 10px; }
+        .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        label { color: var(--text-dim); font-size: 0.9rem; }
+        select, input[type="time"] { background: #444; color: white; border: none; padding: 5px; border-radius: 4px; }
+        .checkbox-row { display: flex; align-items: center; gap: 10px; }
+        
+        /* ADD BUTTONS */
+        .add-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
+        .btn-add { width: 50px; height: 50px; border-radius: 50%; border: none; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; background: #444; color: white; }
+        
+        /* FOOTER */
+        .control-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #000; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #333; }
+        .status-text { font-size: 0.8rem; color: #666; }
+        .status-text.connected { color: var(--success); }
+        .btn-connect { background: var(--primary); color: white; border: none; padding: 8px 20px; border-radius: 20px; font-weight: bold; }
+        .btn-log { background: transparent; border: 1px solid #666; color: #666; padding: 5px 10px; border-radius: 4px; font-size: 0.8rem; }
     </style>
 </head>
 <body>
@@ -34,25 +47,32 @@
     <div class="sticky-header">
         <div class="timer-display" id="mainTimer">00:00</div>
         <div class="header-controls">
-            <button id="btnStart" class="btn-action btn-start" onclick="sendCommand('START_SEQUENCE')" disabled>START</button>
-            <button id="btnAP" class="btn-action btn-ap" onclick="sendCommand('POSTPONE')">AP (STOP)</button>
+            <button class="btn-action btn-horn" id="btnHorn" 
+                onpointerdown="manualHorn(true)" 
+                onpointerup="manualHorn(false)" 
+                onpointerleave="manualHorn(false)">HORN</button>
+            
+            <button id="btnStart" class="btn-action btn-start" onclick="startSequence()">START</button>
+            <button id="btnAP" class="btn-action btn-ap" onclick="sendAP()">AP</button>
         </div>
     </div>
 
     <div class="container">
         <div id="sequence-stack">
-            <div class="card card-type-start" id="card-0">
-                <div class="card-title">Start Sequence</div>
-                <p>Standard 5-4-1-Go</p>
             </div>
+
+        <div class="add-buttons">
+            <button class="btn-add" onclick="addStartCard()" style="background: var(--primary)">+</button>
+            <button class="btn-add" onclick="addGapCard()" style="background: #ffc107; color: black">⏳</button>
         </div>
-        
-        <button class="btn-log" onclick="downloadLog()">Download Race Log (CSV)</button>
     </div>
 
     <div class="control-bar">
-        <div class="status-indicator" id="statusText">Disconnected</div>
-        <button class="btn-connect" id="btnConnect" onclick="connectBluetooth()">Connect to Pi</button>
+        <div>
+            <div class="status-text" id="statusText">Disconnected</div>
+            <button class="btn-log" onclick="downloadLog()">Get Log</button>
+        </div>
+        <button class="btn-connect" id="btnConnect" onclick="connectBluetooth()">Connect</button>
     </div>
 
     <script>
@@ -60,85 +80,62 @@
         const RX_UUID      = '00000002-710e-4a5b-8d75-3e5b444bc3cf';
         const TX_UUID      = '00000003-710e-4a5b-8d75-3e5b444bc3cf';
 
-        let bluetoothDevice;
-        let rxCharacteristic;
+        let bluetoothDevice, rxCharacteristic;
+        let cardIdCounter = 0;
+        let logBuffer = "";
         let speechEnabled = false;
-        let logBuffer = ""; // Holds the incoming file parts
 
         // --- AUDIO ENGINE ---
         function speak(text) {
             if (!speechEnabled) return;
-            window.speechSynthesis.cancel(); 
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 1.1; 
-            window.speechSynthesis.speak(utterance);
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.rate = 1.2; 
+            window.speechSynthesis.speak(u);
         }
 
-        // --- BLUETOOTH LOGIC ---
+        // --- BLUETOOTH ---
         async function connectBluetooth() {
-            const statusText = document.getElementById('statusText');
             try {
-                statusText.innerText = "Requesting...";
                 speechEnabled = true;
-                speak("Connected. Ready.");
-
-                bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'StartBot' }],
-                    optionalServices: [SERVICE_UUID]
-                });
-
+                speak("System Ready.");
+                bluetoothDevice = await navigator.bluetooth.requestDevice({ filters: [{ name: 'StartBot' }], optionalServices: [SERVICE_UUID] });
                 bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
                 const server = await bluetoothDevice.gatt.connect();
                 const service = await server.getPrimaryService(SERVICE_UUID);
                 rxCharacteristic = await service.getCharacteristic(RX_UUID);
-                const txCharacteristic = await service.getCharacteristic(TX_UUID);
-                await txCharacteristic.startNotifications();
-                txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
-
-                statusText.innerText = "Connected to Pi";
-                statusText.classList.add("connected");
+                const tx = await service.getCharacteristic(TX_UUID);
+                await tx.startNotifications();
+                tx.addEventListener('characteristicvaluechanged', handleNotifications);
+                
+                document.getElementById('statusText').innerText = "Connected";
+                document.getElementById('statusText').classList.add("connected");
                 document.getElementById('btnConnect').style.display = 'none';
-                document.getElementById('btnStart').disabled = false;
-
-            } catch (error) {
-                statusText.innerText = "Failed: " + error;
-            }
+            } catch (e) { alert(e); }
         }
 
         function onDisconnected() {
             document.getElementById('statusText').innerText = "Disconnected";
-            document.getElementById('statusText').classList.remove("connected");
             document.getElementById('btnConnect').style.display = 'block';
-            document.getElementById('btnStart').disabled = true;
+            speak("Connection Lost");
         }
 
         function handleNotifications(event) {
-            const value = event.target.value;
-            const decoder = new TextDecoder('utf-8');
+            const dataStr = new TextDecoder().decode(event.target.value);
             try {
-                const data = JSON.parse(decoder.decode(value));
+                const data = JSON.parse(dataStr);
                 
-                // 1. Log File Handling
-                if (data.log_chunk) {
-                    logBuffer += data.log_chunk;
-                }
-                if (data.log_end) {
-                    saveLogFile();
-                }
-                if (data.log_error) {
-                    alert("Log Error: " + data.log_error);
+                // Log Logic
+                if (data.log_chunk) logBuffer += data.log_chunk;
+                if (data.log_end) saveLogFile();
+
+                // Timer Logic
+                if (data.time !== undefined) {
+                    updateTimerUI(data.time);
+                    checkVoiceTriggers(data.time);
                 }
 
-                // 2. Timer UI
-                if (data.time !== undefined) {
-                    const mins = Math.floor(data.time / 60);
-                    const secs = data.time % 60;
-                    document.getElementById('mainTimer').innerText = 
-                        `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                    checkAudioTriggers(data.time);
-                }
-                
-                // 3. Status Buttons
+                // State Logic
                 if (data.status === "Running") {
                     document.getElementById('btnStart').style.display = 'none';
                     document.getElementById('btnAP').style.display = 'block';
@@ -146,59 +143,120 @@
                     document.getElementById('btnStart').style.display = 'block';
                     document.getElementById('btnAP').style.display = 'none';
                 }
-
-            } catch (e) { console.error(e); }
+            } catch (e) {}
         }
 
-        function checkAudioTriggers(secondsLeft) {
-            switch(secondsLeft) {
-                case 305: speak("Sequence started. Five minutes to warning."); break;
-                case 300: speak("Five minutes. Warning signal."); break;
-                case 240: speak("Four minutes. Prep signal."); break;
-                case 60:  speak("One minute. Long sound."); break;
-                case 10:  speak("Ten seconds."); break;
-                case 5:   speak("Five"); break;
-                case 4:   speak("Four"); break;
-                case 3:   speak("Three"); break;
-                case 2:   speak("Two"); break;
-                case 1:   speak("One"); break;
-                case 0:   speak("Start! Go go go!"); break;
-            }
+        function updateTimerUI(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            document.getElementById('mainTimer').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
-        async function sendCommand(cmdType) {
-            if (!rxCharacteristic) return;
-            const payload = JSON.stringify({ command: cmdType });
-            const encoder = new TextEncoder('utf-8');
-            await rxCharacteristic.writeValue(encoder.encode(payload));
+        // --- VOICE LOGIC (T-Minus System) ---
+        function checkVoiceTriggers(t) {
+            // Major Marks: 300(5m), 240(4m), 60(1m), 0(Go)
+            // We want countdowns at 45s, 30s, 20s, 10s, 5,4,3,2,1 before each mark.
             
-            if (cmdType === 'START_SEQUENCE') speak("Starting sequence.");
-            if (cmdType === 'POSTPONE') speak("Race Postponed.");
+            const marks = [300, 240, 60, 0];
+            const triggers = [45, 30, 20, 10, 5, 4, 3, 2, 1];
+
+            marks.forEach(mark => {
+                const diff = t - mark;
+                
+                // If we are exactly AT the mark
+                if (diff === 0) {
+                    if(mark === 300) speak("NOW! Warning Signal.");
+                    if(mark === 240) speak("NOW! Prep Signal.");
+                    if(mark === 60)  speak("NOW! One Minute.");
+                    if(mark === 0)   speak("NOW! START! Go Go Go!");
+                }
+                
+                // If we are approaching the mark (diff is positive)
+                if (triggers.includes(diff)) {
+                    let eventName = "";
+                    if(mark === 300) eventName = "Warning";
+                    if(mark === 240) eventName = "Prep";
+                    if(mark === 60)  eventName = "One Minute";
+                    if(mark === 0)   eventName = "Start";
+                    
+                    if (diff <= 5) speak(diff.toString()); // Just say "Five", "Four"
+                    else speak(`${diff} seconds to ${eventName}`);
+                }
+            });
+            
+            // Initial Sequence Start
+            if (t === 305) speak("Sequence Started. Standby.");
+        }
+
+        // --- COMMANDS ---
+        async function sendCommand(jsonObj) {
+            if (!rxCharacteristic) return;
+            await rxCharacteristic.writeValue(new TextEncoder().encode(JSON.stringify(jsonObj)));
+        }
+
+        function startSequence() {
+            // Check top card for settings
+            const firstCard = document.querySelector('.card-type-start');
+            let settings = {};
+            if(firstCard) {
+                // Future: Read class/orange flag and send to Pi
+            }
+            sendCommand({ command: 'START_SEQUENCE' });
+        }
+
+        function sendAP() { sendCommand({ command: 'POSTPONE' }); }
+        
+        function manualHorn(state) {
+            if(state) sendCommand({ command: 'HORN_ON' });
+            else sendCommand({ command: 'HORN_OFF' });
         }
 
         function downloadLog() {
-            if (!rxCharacteristic) {
-                alert("Connect to Pi first!");
-                return;
-            }
-            // Clear buffer and ask Pi for data
             logBuffer = "";
-            sendCommand("GET_LOG");
-            alert("Requesting Log... Wait for download.");
+            sendCommand({ command: 'GET_LOG' });
         }
 
         function saveLogFile() {
             const blob = new Blob([logBuffer], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = 'race_log.csv';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            alert("Log Downloaded!");
+            a.href = url; a.download = 'race_log.csv';
+            document.body.appendChild(a); a.click();
         }
+
+        // --- CARD UI ---
+        const stackEl = document.getElementById('sequence-stack');
+        new Sortable(stackEl, { handle: '.drag-handle', animation: 150 });
+
+        function addStartCard() {
+            const id = cardIdCounter++;
+            stackEl.insertAdjacentHTML('beforeend', `
+                <div class="card card-type-start" id="c-${id}" style="border-left-color: var(--primary)">
+                    <div class="card-header">
+                        <div><span class="drag-handle">☰</span><span class="card-title">Start Sequence</span></div>
+                        <button onclick="this.closest('.card').remove()" style="background:none;border:none;color:#666">✕</button>
+                    </div>
+                    <div class="form-row"><label>Class</label><select><option>ILCA</option><option>Opti</option><option>420</option></select></div>
+                    <div class="form-row"><label>Prep Flag</label><select><option>P (Blue)</option><option>U (Red/White)</option><option>Black</option></select></div>
+                    <div class="checkbox-row"><input type="checkbox" id="orange-${id}"><label for="orange-${id}" style="color:#ff9800">Orange Flag Displayed</label></div>
+                    <div class="form-row" style="margin-top:10px"><label>Schedule Time</label><input type="time"></div>
+                </div>`);
+        }
+        
+        function addGapCard() {
+            const id = cardIdCounter++;
+            stackEl.insertAdjacentHTML('beforeend', `
+                <div class="card" id="c-${id}" style="border-left-color: #ffc107">
+                    <div class="card-header">
+                        <div><span class="drag-handle">☰</span><span class="card-title">Gap / AP</span></div>
+                        <button onclick="this.closest('.card').remove()" style="background:none;border:none;color:#666">✕</button>
+                    </div>
+                    <div class="form-row"><label>Duration</label><select><option>Rolling (Immediate)</option><option>1 Min</option><option>5 Min</option></select></div>
+                </div>`);
+        }
+
+        // Init with one card
+        addStartCard();
     </script>
 </body>
 </html>
