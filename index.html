@@ -3,39 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>StartBot Pro</title>
+    <title>Regatta Pro</title>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
         :root { --bg-color: #1a1a1a; --card-bg: #2d2d2d; --primary: #007bff; --danger: #dc3545; --success: #28a745; --text-main: #ffffff; --text-dim: #b0b0b0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background: var(--bg-color); margin: 0; padding-bottom: 140px; color: var(--text-main); }
+        body { font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background: var(--bg-color); margin: 0; padding-bottom: 160px; color: var(--text-main); }
         
         /* HEADER */
         .sticky-header { position: sticky; top: 0; z-index: 1000; background: #000000; padding: 15px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
-        .timer-display { font-size: 3rem; font-weight: bold; font-family: monospace; color: var(--success); }
-        .header-controls { display: flex; gap: 8px; }
-        .btn-action { padding: 12px 15px; border-radius: 6px; border: none; font-weight: bold; font-size: 0.9rem; cursor: pointer; text-transform: uppercase; color: white; }
-        .btn-start { background: var(--success); width: 100px; }
-        .btn-ap { background: var(--danger); width: 80px; display: none; }
-        .btn-horn { background: #ffc107; color: black; width: 80px; }
+        .timers { text-align: left; }
+        .main-timer { font-size: 2.5rem; font-weight: bold; font-family: monospace; color: var(--success); line-height: 1; }
+        .sub-timer { font-size: 1.2rem; font-family: monospace; color: #ffc107; margin-top: 5px; }
+        .sub-label { font-size: 0.7rem; color: #666; text-transform: uppercase; }
         
+        .header-controls { display: flex; gap: 8px; }
+        .btn-action { padding: 12px 10px; border-radius: 6px; border: none; font-weight: bold; font-size: 0.85rem; cursor: pointer; text-transform: uppercase; color: white; display: flex; align-items: center; justify-content: center; text-align: center;}
+        .btn-start { background: var(--success); width: 70px; }
+        .btn-ap { background: var(--danger); width: 50px; display: none; }
+        .btn-horn { background: #ffc107; color: black; width: 60px; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+
         /* CARD STACK */
         .container { padding: 15px; }
         #sequence-stack { display: flex; flex-direction: column; gap: 12px; }
-        .card { background: var(--card-bg); border-radius: 8px; padding: 15px; border-left: 5px solid #555; position: relative; }
+        .card { background: var(--card-bg); border-radius: 8px; padding: 15px; border-left: 5px solid #555; position: relative; transition: opacity 0.3s; }
+        .card.locked { opacity: 0.7; pointer-events: none; }
         .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .card-title { font-weight: bold; font-size: 1.1rem; }
         .drag-handle { cursor: grab; color: #666; font-size: 1.5rem; padding-right: 10px; }
-        .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        label { color: var(--text-dim); font-size: 0.9rem; }
-        select, input[type="time"] { background: #444; color: white; border: none; padding: 5px; border-radius: 4px; }
-        .checkbox-row { display: flex; align-items: center; gap: 10px; }
         
-        /* ADD BUTTONS */
-        .add-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
-        .btn-add { width: 50px; height: 50px; border-radius: 50%; border: none; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; background: #444; color: white; }
+        .form-row { margin-bottom: 12px; }
+        label { display: block; color: var(--text-dim); font-size: 0.8rem; margin-bottom: 4px; }
+        select, input[type="time"] { width: 100%; background: #444; color: white; border: 1px solid #555; padding: 10px; border-radius: 6px; font-size: 1rem; box-sizing: border-box; }
         
+        /* COMMIT BUTTON */
+        .commit-zone { margin-top: 30px; margin-bottom: 20px; }
+        .btn-commit { width: 100%; padding: 15px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; transition: all 0.3s; text-transform: uppercase; }
+        .btn-commit.unlocked { background: var(--primary); color: white; }
+        .btn-commit.locked { background: var(--danger); color: white; animation: pulse 2s infinite; }
+        
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+
         /* FOOTER */
-        .control-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #000; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #333; }
+        .control-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #000; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #333; z-index: 2000; }
         .status-text { font-size: 0.8rem; color: #666; }
         .status-text.connected { color: var(--success); }
         .btn-connect { background: var(--primary); color: white; border: none; padding: 8px 20px; border-radius: 20px; font-weight: bold; }
@@ -45,14 +54,19 @@
 <body>
 
     <div class="sticky-header">
-        <div class="timer-display" id="mainTimer">00:00</div>
+        <div class="timers">
+            <div class="main-timer" id="mainTimer">00:00</div>
+            <div class="sub-label">Next Signal</div>
+            <div class="sub-timer" id="nextSignalTimer">--:--</div>
+        </div>
         <div class="header-controls">
             <button class="btn-action btn-horn" id="btnHorn" 
                 onpointerdown="manualHorn(true)" 
                 onpointerup="manualHorn(false)" 
-                onpointerleave="manualHorn(false)">HORN</button>
+                onpointerleave="manualHorn(false)"
+                oncontextmenu="return false;">HORN</button>
             
-            <button id="btnStart" class="btn-action btn-start" onclick="startSequence()">START</button>
+            <button id="btnStart" class="btn-action btn-start" onclick="startNow()">START<br>NOW</button>
             <button id="btnAP" class="btn-action btn-ap" onclick="sendAP()">AP</button>
         </div>
     </div>
@@ -61,9 +75,8 @@
         <div id="sequence-stack">
             </div>
 
-        <div class="add-buttons">
-            <button class="btn-add" onclick="addStartCard()" style="background: var(--primary)">+</button>
-            <button class="btn-add" onclick="addGapCard()" style="background: #ffc107; color: black">⏳</button>
+        <div class="commit-zone">
+            <button id="btnCommit" class="btn-commit unlocked" onclick="toggleCommit()">COMMIT TO SEQUENCE</button>
         </div>
     </div>
 
@@ -84,6 +97,13 @@
         let cardIdCounter = 0;
         let logBuffer = "";
         let speechEnabled = false;
+        let isCommitted = false;
+        let checkScheduleInterval = null;
+        
+        // Settings Data Storage
+        let currentClass = "";
+        let currentPrep = "";
+        let orangeOffset = 0; 
 
         // --- AUDIO ENGINE ---
         function speak(text) {
@@ -124,18 +144,14 @@
             const dataStr = new TextDecoder().decode(event.target.value);
             try {
                 const data = JSON.parse(dataStr);
-                
-                // Log Logic
                 if (data.log_chunk) logBuffer += data.log_chunk;
                 if (data.log_end) saveLogFile();
-
-                // Timer Logic
+                
                 if (data.time !== undefined) {
-                    updateTimerUI(data.time);
+                    updateTimers(data.time);
                     checkVoiceTriggers(data.time);
                 }
-
-                // State Logic
+                
                 if (data.status === "Running") {
                     document.getElementById('btnStart').style.display = 'none';
                     document.getElementById('btnAP').style.display = 'block';
@@ -146,46 +162,129 @@
             } catch (e) {}
         }
 
-        function updateTimerUI(seconds) {
-            const mins = Math.floor(seconds / 60);
-            const secs = seconds % 60;
+        function updateTimers(t) {
+            // Main Timer
+            const mins = Math.floor(t / 60);
+            const secs = t % 60;
             document.getElementById('mainTimer').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
+            
+            // Next Signal Timer Logic
+            let nextMark = 0;
+            if (t > 300) nextMark = 300;     // Before Warning
+            else if (t > 240) nextMark = 240; // Before Prep
+            else if (t > 60) nextMark = 60;   // Before 1-Min
+            else nextMark = 0;                // Before Start
+            
+            const diff = t - nextMark;
+            const dMins = Math.floor(diff / 60);
+            const dSecs = diff % 60;
+            document.getElementById('nextSignalTimer').innerText = `${dMins}:${dSecs.toString().padStart(2, '0')}`;
         }
 
-        // --- VOICE LOGIC (T-Minus System) ---
+        // --- VOICE LOGIC (APPROVED SCRIPT) ---
         function checkVoiceTriggers(t) {
-            // Major Marks: 300(5m), 240(4m), 60(1m), 0(Go)
-            // We want countdowns at 45s, 30s, 20s, 10s, 5,4,3,2,1 before each mark.
+            // Calculate effective marks based on orange flag offset
+            const isOrangeActive = (orangeOffset > 0);
             
-            const marks = [300, 240, 60, 0];
-            const triggers = [45, 30, 20, 10, 5, 4, 3, 2, 1];
+            // Define Marks
+            let marks = [];
+            // If Orange Flag is active, add its start time (e.g., 600s or 10:00)
+            if (isOrangeActive) marks.push(300 + orangeOffset); // e.g. 300+300 = 600
+            
+            marks.push(300); // Warning
+            marks.push(240); // Prep
+            marks.push(60);  // One Min
+            marks.push(0);   // Start
+
+            const triggers = [45, 30, 20, 15, 10, 5, 4, 3, 2, 1];
 
             marks.forEach(mark => {
                 const diff = t - mark;
                 
-                // If we are exactly AT the mark
+                // EVENTS (The "NOW!" moments)
                 if (diff === 0) {
-                    if(mark === 300) speak("NOW! Warning Signal.");
-                    if(mark === 240) speak("NOW! Prep Signal.");
-                    if(mark === 60)  speak("NOW! One Minute.");
-                    if(mark === 0)   speak("NOW! START! Go Go Go!");
+                    if (mark > 300) speak("NOW! Orange Flag Display."); // 10:00
+                    if (mark === 300) speak(`NOW! ${currentClass} Class Flag Display.`);
+                    if (mark === 240) speak(`NOW! ${currentPrep} Flag Display.`);
+                    if (mark === 60)  speak(`NOW! ${currentPrep} Flag Remove.`);
+                    if (mark === 0)   speak(`NOW! ${currentClass} Class Flag Remove.`);
                 }
-                
-                // If we are approaching the mark (diff is positive)
+
+                // COUNTDOWNS
                 if (triggers.includes(diff)) {
+                    // Determine Event Name for speech
                     let eventName = "";
-                    if(mark === 300) eventName = "Warning";
-                    if(mark === 240) eventName = "Prep";
-                    if(mark === 60)  eventName = "One Minute";
-                    if(mark === 0)   eventName = "Start";
-                    
-                    if (diff <= 5) speak(diff.toString()); // Just say "Five", "Four"
-                    else speak(`${diff} seconds to ${eventName}`);
+                    if (mark > 300) eventName = "Orange Flag Display";
+                    else if (mark === 300) eventName = `${currentClass} Class Flag Display`;
+                    else if (mark === 240) eventName = `${currentPrep} Flag Display`;
+                    else if (mark === 60)  eventName = `${currentPrep} Flag Remove`;
+                    else if (mark === 0)   eventName = `${currentClass} Class Flag Remove`;
+
+                    // Specific phrasing
+                    if (diff === 10) speak("10 seconds.");
+                    else if (diff <= 5) speak(diff.toString());
+                    else speak(`${diff} seconds to ${eventName}.`);
                 }
             });
+        }
+
+        // --- LOGIC & COMMITTING ---
+        
+        function toggleCommit() {
+            const btn = document.getElementById('btnCommit');
+            const card = document.querySelector('.card-type-start');
+            if(!card) return;
+
+            if (!isCommitted) {
+                // LOCK IT
+                isCommitted = true;
+                btn.innerText = "SEQUENCE LOCKED IN. PRESS TO UNLOCK";
+                btn.className = "btn-commit locked";
+                card.classList.add("locked");
+                
+                // Read Values
+                const id = card.id.split('-')[1];
+                currentClass = document.getElementById(`class-${id}`).value;
+                if(currentClass === "None") currentClass = ""; // Handle "None"
+                
+                currentPrep = document.getElementById(`prep-${id}`).value;
+                
+                const orangeVal = document.getElementById(`orange-${id}`).value;
+                orangeOffset = parseInt(orangeVal) * 60; // Convert min to sec
+                
+                const timeInput = document.getElementById(`time-${id}`).value;
+                
+                // Start Schedule Watcher
+                if (timeInput) {
+                    startScheduleWatcher(timeInput);
+                    speak(`Sequence Armed for ${timeInput}`);
+                } else {
+                    speak("Sequence Armed. Waiting for manual start.");
+                }
+
+            } else {
+                // UNLOCK IT
+                isCommitted = false;
+                btn.innerText = "COMMIT TO SEQUENCE";
+                btn.className = "btn-commit unlocked";
+                card.classList.remove("locked");
+                if(checkScheduleInterval) clearInterval(checkScheduleInterval);
+                speak("Sequence Unlocked.");
+            }
+        }
+
+        function startScheduleWatcher(targetTimeStr) {
+            if(checkScheduleInterval) clearInterval(checkScheduleInterval);
             
-            // Initial Sequence Start
-            if (t === 305) speak("Sequence Started. Standby.");
+            checkScheduleInterval = setInterval(() => {
+                const now = new Date();
+                const nowStr = now.toTimeString().slice(0, 5); // "14:00"
+                
+                if (nowStr === targetTimeStr) {
+                    clearInterval(checkScheduleInterval);
+                    fireSequence(); // Auto-fire!
+                }
+            }, 1000);
         }
 
         // --- COMMANDS ---
@@ -194,14 +293,28 @@
             await rxCharacteristic.writeValue(new TextEncoder().encode(JSON.stringify(jsonObj)));
         }
 
-        function startSequence() {
-            // Check top card for settings
-            const firstCard = document.querySelector('.card-type-start');
-            let settings = {};
-            if(firstCard) {
-                // Future: Read class/orange flag and send to Pi
+        function startNow() {
+            // Start Now button bypasses commit check, but grabs values if possible
+            const card = document.querySelector('.card-type-start');
+            if(card) {
+                const id = card.id.split('-')[1];
+                currentClass = document.getElementById(`class-${id}`).value;
+                if(currentClass === "None") currentClass = "";
+                currentPrep = document.getElementById(`prep-${id}`).value;
+                const orangeVal = document.getElementById(`orange-${id}`).value;
+                orangeOffset = parseInt(orangeVal) * 60;
             }
-            sendCommand({ command: 'START_SEQUENCE' });
+            fireSequence();
+        }
+
+        function fireSequence() {
+            // Calculate total seconds to send to Pi
+            // Standard = 300s (5m). If Orange offset is 300s (5m), total is 600s.
+            // Add 5s buffer for voice intro.
+            const duration = 305 + orangeOffset;
+            
+            sendCommand({ command: 'START_SEQUENCE', seconds: duration });
+            speak("Sequence Initiated.");
         }
 
         function sendAP() { sendCommand({ command: 'POSTPONE' }); }
@@ -210,10 +323,10 @@
             if(state) sendCommand({ command: 'HORN_ON' });
             else sendCommand({ command: 'HORN_OFF' });
         }
-
-        function downloadLog() {
-            logBuffer = "";
-            sendCommand({ command: 'GET_LOG' });
+        
+        function downloadLog() { 
+            logBuffer = ""; 
+            sendCommand({ command: 'GET_LOG' }); 
         }
 
         function saveLogFile() {
@@ -224,38 +337,81 @@
             document.body.appendChild(a); a.click();
         }
 
+        // --- DYNAMIC UI UPDATES ---
+        function updateTimeLabel(id) {
+            const orangeVal = document.getElementById(`orange-${id}`).value;
+            const label = document.getElementById(`time-label-${id}`);
+            
+            if (orangeVal === "0") {
+                label.innerText = "Scheduled Warning Signal (Class Flag)";
+                label.style.color = "#b0b0b0";
+            } else {
+                label.innerText = "Scheduled Orange Flag Display";
+                label.style.color = "#ff9800";
+            }
+        }
+
         // --- CARD UI ---
         const stackEl = document.getElementById('sequence-stack');
-        new Sortable(stackEl, { handle: '.drag-handle', animation: 150 });
+        // new Sortable(stackEl, { handle: '.drag-handle', animation: 150 });
 
         function addStartCard() {
+            // Only allow 1 start card for this version to keep logic simple
+            if(document.querySelector('.card-type-start')) return; 
+
             const id = cardIdCounter++;
             stackEl.insertAdjacentHTML('beforeend', `
                 <div class="card card-type-start" id="c-${id}" style="border-left-color: var(--primary)">
                     <div class="card-header">
-                        <div><span class="drag-handle">☰</span><span class="card-title">Start Sequence</span></div>
-                        <button onclick="this.closest('.card').remove()" style="background:none;border:none;color:#666">✕</button>
+                        <div><span class="card-title">Start Sequence</span></div>
                     </div>
-                    <div class="form-row"><label>Class</label><select><option>ILCA</option><option>Opti</option><option>420</option></select></div>
-                    <div class="form-row"><label>Prep Flag</label><select><option>P (Blue)</option><option>U (Red/White)</option><option>Black</option></select></div>
-                    <div class="checkbox-row"><input type="checkbox" id="orange-${id}"><label for="orange-${id}" style="color:#ff9800">Orange Flag Displayed</label></div>
-                    <div class="form-row" style="margin-top:10px"><label>Schedule Time</label><input type="time"></div>
+                    
+                    <div class="form-row">
+                        <label>Class</label>
+                        <select id="class-${id}">
+                            <option value="None">None (General)</option>
+                            <option>Optimist Gold</option>
+                            <option>Optimist Silver</option>
+                            <option>ILCA 4</option>
+                            <option>ILCA 6</option>
+                            <option>ILCA 7</option>
+                            <option>29er</option>
+                            <option>49er</option>
+                            <option>Techno293</option>
+                            <option>Techno293Plus</option>
+                            <option>iQ Foil</option>
+                            <option>WingFoil</option>
+                            <option>KiteFoil</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <label>Prep Flag</label>
+                        <select id="prep-${id}">
+                            <option value="P">P (Blue)</option>
+                            <option value="U">U (Red/White)</option>
+                            <option value="Black">Black</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label style="color:#ff9800">Orange Flag Sound</label>
+                        <select id="orange-${id}" onchange="updateTimeLabel(${id})">
+                            <option value="0">On START (of sequence)</option>
+                            <option value="1">1 Min before Class Flag</option>
+                            <option value="4">4 Min before Class Flag</option>
+                            <option value="5">5 Min before Class Flag</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <label id="time-label-${id}">Scheduled Warning Signal</label>
+                        <input type="time" id="time-${id}">
+                    </div>
                 </div>`);
         }
         
-        function addGapCard() {
-            const id = cardIdCounter++;
-            stackEl.insertAdjacentHTML('beforeend', `
-                <div class="card" id="c-${id}" style="border-left-color: #ffc107">
-                    <div class="card-header">
-                        <div><span class="drag-handle">☰</span><span class="card-title">Gap / AP</span></div>
-                        <button onclick="this.closest('.card').remove()" style="background:none;border:none;color:#666">✕</button>
-                    </div>
-                    <div class="form-row"><label>Duration</label><select><option>Rolling (Immediate)</option><option>1 Min</option><option>5 Min</option></select></div>
-                </div>`);
-        }
-
-        // Init with one card
+        // Auto-add one card on load
         addStartCard();
     </script>
 </body>
