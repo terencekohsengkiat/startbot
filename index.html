@@ -103,11 +103,9 @@
         let gapInterval = null;
         let scheduleInterval = null;
         
-        // Active Card Config
         let currentClass = "";
         let currentPrep = "";
         let orangeOffset = 0; 
-        let currentRule = "std"; // 'std' or '3min'
 
         async function requestWakeLock() {
             try { wakeLock = await navigator.wakeLock.request('screen'); } 
@@ -193,8 +191,6 @@
             currentClass = document.getElementById(`class-${id}`).value;
             if(currentClass === "None") currentClass = ""; 
             currentPrep = document.getElementById(`prep-${id}`).value;
-            currentRule = document.getElementById(`rule-${id}`).value; // 'std' or '3min'
-            
             const orangeVal = document.getElementById(`orange-${id}`).value;
             orangeOffset = parseInt(orangeVal) * 60; 
             
@@ -241,12 +237,9 @@
                     clearInterval(scheduleInterval);
                     firePiSequence();
                 } else {
-                    // Update visual (Diff to start + Sequence Length)
-                    const baseLen = (currentRule === '3min') ? 180 : 300;
-                    updateTimers(diff + baseLen + orangeOffset);
-                    
-                    // Audio Pre-roll
-                    if ([45, 30, 20, 15, 10, 5, 4, 3, 2, 1].includes(diff)) {
+                    updateTimers(diff);
+                    // Pre-roll Audio (Orange offset is effectively 0 for pre-roll visual)
+                     if ([45, 30, 20, 15, 10, 5, 4, 3, 2, 1].includes(diff)) {
                          let msg = (orangeOffset > 0) ? "Orange Flag Display" : `${currentClass} Class Flag Display`;
                          if(diff <= 5) speak(diff.toString());
                          else speak(`${diff} seconds to ${msg}`);
@@ -257,9 +250,9 @@
 
         function firePiSequence() {
             if(scheduleInterval) clearInterval(scheduleInterval);
-            const baseLen = (currentRule === '3min') ? 180 : 300;
-            const duration = baseLen + orangeOffset;
-            sendCommand({ command: 'START_SEQUENCE', seconds: duration, rule: currentRule });
+            // EXACT TIME. NO BUFFER.
+            const duration = 300 + orangeOffset;
+            sendCommand({ command: 'START_SEQUENCE', seconds: duration });
             speak("Sequence Initiated.");
         }
 
@@ -274,22 +267,14 @@
                  return;
             }
 
-            // YELLOW TIMER LOGIC (ADAPTIVE)
+            // YELLOW TIMER LOGIC
             let marks = [];
-            if(orangeOffset > 0) {
-                // If Orange, base mark is offset + baseLen
-                const base = (currentRule === '3min') ? 180 : 300;
-                marks.push(base + orangeOffset);
-            }
-            
-            if(currentRule === '3min') {
-                marks.push(180); marks.push(120); marks.push(60); marks.push(0);
-            } else {
-                marks.push(300); marks.push(240); marks.push(60); marks.push(0);
-            }
+            if(orangeOffset > 0) marks.push(300 + orangeOffset);
+            marks.push(300); marks.push(240); marks.push(60); marks.push(0);
             
             let nextMark = 0;
             for(let m of marks) {
+                // Find largest mark smaller than current t (next event down)
                 if (t > m) { nextMark = m; break; }
             }
             const diff = t - nextMark;
@@ -300,18 +285,8 @@
 
         function checkVoiceTriggers(t) {
             let marks = [];
-            // BASE MARKS
-            if(currentRule === '3min') {
-                marks.push(180); marks.push(120); marks.push(60); marks.push(0);
-            } else {
-                marks.push(300); marks.push(240); marks.push(60); marks.push(0);
-            }
-            
-            // ORANGE MARK
-            if (orangeOffset > 0) {
-                 const base = (currentRule === '3min') ? 180 : 300;
-                 marks.unshift(base + orangeOffset);
-            }
+            if (orangeOffset > 0) marks.push(300 + orangeOffset); 
+            marks.push(300); marks.push(240); marks.push(60); marks.push(0);
 
             const triggers = [45, 30, 20, 15, 10, 5, 4, 3, 2, 1];
 
@@ -319,29 +294,17 @@
                 const diff = t - mark;
                 if (diff >= 0 && diff < 300) {
                     if (diff === 0) {
-                        // "NOW" EVENTS
-                        if (mark > ((currentRule==='3min')?180:300)) speak("NOW! Orange Flag Display.");
-                        
-                        else if (mark === 300) speak(`NOW! ${currentClass} Class Flag Display.`); // 5m
-                        else if (mark === 180 && currentRule==='3min') speak(`NOW! ${currentClass} Class Flag Display.`); // 3m Warning
-                        
-                        else if (mark === 240) speak(`NOW! ${currentPrep} Flag Display.`); // 4m Prep
-                        else if (mark === 120 && currentRule==='3min') speak(`NOW! ${currentPrep} Flag Display.`); // 2m Prep
-                        
-                        else if (mark === 60)  speak(`NOW! ${currentPrep} Flag Remove.`);
-                        else if (mark === 0)   speak(`NOW! ${currentClass} Class Flag Remove.`);
+                        if (mark > 300) speak("NOW! Orange Flag Display."); 
+                        if (mark === 300) speak(`NOW! ${currentClass} Class Flag Display.`);
+                        if (mark === 240) speak(`NOW! ${currentPrep} Flag Display.`);
+                        if (mark === 60)  speak(`NOW! ${currentPrep} Flag Remove.`);
+                        if (mark === 0)   speak(`NOW! ${currentClass} Class Flag Remove.`);
                     }
                     if (triggers.includes(diff)) {
                         let eventName = "";
-                        // NAME EVENTS
-                        if (mark > ((currentRule==='3min')?180:300)) eventName = "Orange Flag Display";
-                        
+                        if (mark > 300) eventName = "Orange Flag Display";
                         else if (mark === 300) eventName = `${currentClass} Class Flag Display`;
-                        else if (mark === 180 && currentRule==='3min') eventName = `${currentClass} Class Flag Display`;
-                        
                         else if (mark === 240) eventName = `${currentPrep} Flag Display`;
-                        else if (mark === 120 && currentRule==='3min') eventName = `${currentPrep} Flag Display`;
-                        
                         else if (mark === 60)  eventName = `${currentPrep} Flag Remove`;
                         else if (mark === 0)   eventName = `${currentClass} Class Flag Remove`;
 
@@ -369,18 +332,22 @@
         }
         
         function resetUI() {
+             // ECHO FIX: Only speak reset if we were actually active
              if(!isCommitted && activeCardIndex === -1 && !gapInterval && !scheduleInterval) return;
+
              isCommitted = false;
              activeCardIndex = -1;
              if(gapInterval) clearInterval(gapInterval);
              if(scheduleInterval) clearInterval(scheduleInterval);
              gapInterval = null; scheduleInterval = null;
+             
              document.getElementById('btnCommit').innerText = "COMMIT TO SEQUENCE";
              document.getElementById('btnCommit').className = "btn-commit unlocked";
              document.querySelectorAll('.card').forEach(c => {
                  c.classList.remove("locked");
                  c.style.borderLeftWidth = "5px";
              });
+             
              sendCommand({ command: 'POSTPONE' });
              speak("Sequence Reset.");
              document.getElementById('mainTimer').innerText = "00:00";
@@ -395,7 +362,9 @@
         function startNow() {
             if(isCommitted && activeCardIndex >= 0) {
                 if(scheduleInterval) firePiSequence();
-            } else { alert("Please Commit a Sequence first."); }
+            } else {
+                 alert("Please Commit a Sequence first.");
+            }
         }
         
         function sendAP() { resetUI(); }
@@ -432,7 +401,6 @@
                         <div><span class="drag-handle">☰</span><span class="card-title">Start Sequence</span></div>
                         <button onclick="this.closest('.card').remove()" style="background:none;border:none;color:#666">✕</button>
                     </div>
-                    <div class="form-row"><label>Sequence Rule</label><select id="rule-${id}"><option value="std">Standard 5-Min (RRS 26)</option><option value="3min">3-Min (Appendix U)</option></select></div>
                     <div class="form-row"><label>Class</label><select id="class-${id}"><option value="None">None (General)</option><option>Optimist Gold</option><option>Optimist Silver</option><option>ILCA 4</option><option>ILCA 6</option><option>ILCA 7</option><option>29er</option><option>49er</option><option>Techno293</option><option>Techno293Plus</option><option>iQ Foil</option><option>WingFoil</option><option>KiteFoil</option></select></div>
                     <div class="form-row"><label>Prep Flag</label><select id="prep-${id}"><option value="P">P (Blue)</option><option value="U">U (Red/White)</option><option value="Black">Black</option></select></div>
                     <div class="form-row"><label style="color:#ff9800">Orange Flag Sound</label><select id="orange-${id}" onchange="updateTimeLabel(${id})"><option value="0">No Orange Flag Needed</option><option value="1">1 Min before Class Flag</option><option value="4">4 Min before Class Flag</option><option value="5">5 Min before Class Flag</option></select></div>
